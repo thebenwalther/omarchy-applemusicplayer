@@ -2,15 +2,15 @@
   "schemaVersion": 1,
   "id": "bmw.media",
   "name": "Apple Music Media",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "author": "Ben Walther",
-  "description": "Now playing, transport controls, volume, and mini-player access for Omarchy Apple Music Player",
+  "description": "Polished now-playing controls with artwork, timeline, volume, and media-source selection",
   "kinds": ["bar-widget"],
   "keepLoaded": true,
   "entryPoints": { "barWidget": "BarWidget.qml" },
   "barWidget": {
     "displayName": "Apple Music Media",
-    "description": "Apple Music state and controls",
+    "description": "Artwork-rich Apple Music and MPRIS controls",
     "category": "Media",
     "allowMultiple": false
   }

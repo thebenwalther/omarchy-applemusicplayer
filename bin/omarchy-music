@@ -4,6 +4,13 @@ set -euo pipefail
 APP_URL="http://applemusic.localhost:17689/"
 HEALTH_URL="http://127.0.0.1:17689/api/health"
 PROFILE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/omarchy-applemusicplayer/chromium"
+CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy-applemusicplayer/config.json"
+
+# MusicKit playback needs credentials from a paid Apple Developer membership.
+# Until they exist, use Apple's official web player and keep the same shortcut.
+if [[ ! -s "$CONFIG_FILE" ]] || ! jq -e '.teamId and .keyId and .privateKey' "$CONFIG_FILE" >/dev/null 2>&1; then
+  exec omarchy launch or focus webapp "music.apple.com" "https://music.apple.com/"
+fi
 
 systemctl --user start omarchy-applemusicplayer.service
 for _ in {1..40}; do

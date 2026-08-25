@@ -49,13 +49,18 @@ The file and its parent directory are restricted to the current user. Apple acco
 
 | Surface | Action |
 | --- | --- |
-| `SUPER + SHIFT + M` | Launch or focus the full player |
-| `SUPER + ALT + M` | Toggle the mini player special workspace |
-| Bar left click | Play/pause |
+| `SUPER + SHIFT + M` | Launch or focus Apple Music |
+| `SUPER + ALT + M` | Toggle the MusicKit mini player when configured |
+| Bar left click | Play or pause |
 | Bar middle click | Next track |
-| Bar right click | Toggle mini player |
-| Bar scroll | Volume |
+| Bar right click | Open now-playing details |
+| Bar scroll | Adjust volume, or change tracks when volume is unavailable |
 | Hardware media keys | Previous, play/pause, and next through MPRIS |
+
+Without paid Apple Developer MusicKit credentials, `omarchy-music` automatically
+opens Apple's official web player. The bar continues to provide artwork,
+transport, timeline, volume, and source controls through MPRIS; MusicKit-only
+features such as the owned Up Next queue remain unavailable in this mode.
 
 ## Development
 
