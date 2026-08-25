@@ -1,23 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_URL="http://applemusic.localhost:17689/"
-HEALTH_URL="http://127.0.0.1:17689/api/health"
-PROFILE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/omarchy-applemusicplayer/chromium"
-CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy-applemusicplayer/config.json"
-
-# MusicKit playback needs credentials from a paid Apple Developer membership.
-# Until they exist, use Apple's official web player and keep the same shortcut.
-if [[ ! -s "$CONFIG_FILE" ]] || ! jq -e '.teamId and .keyId and .privateKey' "$CONFIG_FILE" >/dev/null 2>&1; then
-  exec omarchy launch or focus webapp "chrome-music.apple.com__-Default" "https://music.apple.com/"
-fi
-
-systemctl --user start omarchy-applemusicplayer.service
-for _ in {1..40}; do
-  curl --silent --fail --max-time 1 "$HEALTH_URL" >/dev/null 2>&1 && break
-  sleep 0.1
-done
-
-mkdir -p "$PROFILE_DIR"
-LAUNCH_COMMAND="uwsm-app -- chromium --app=$APP_URL --user-data-dir=$PROFILE_DIR --no-first-run --disable-session-crashed-bubble"
-exec omarchy launch or focus "chrome-applemusic.localhost__-Default" "$LAUNCH_COMMAND"
+# Match the stable app-id suffix while allowing Chromium-family browser prefixes.
+exec omarchy launch or focus webapp "music\\.apple\\.com__-Default" "https://music.apple.com/"

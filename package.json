@@ -1,17 +1,12 @@
 {
   "name": "omarchy-applemusicplayer",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "An Omarchy-native Apple Music player powered by MusicKit on the Web",
+  "description": "Apple Music web-player integration and rich MPRIS widget for Omarchy",
   "scripts": {
-    "start": "bun run src/server.ts",
-    "dev": "OMARCHY_APPLEMUSIC_DEV=1 bun --watch src/server.ts",
     "test": "bun test",
     "install:user": "bash scripts/install.sh",
     "uninstall:user": "bash scripts/uninstall.sh"
-  },
-  "engines": {
-    "bun": ">=1.2.0"
   }
 }

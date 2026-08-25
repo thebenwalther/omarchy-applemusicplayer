@@ -2,15 +2,15 @@
   "schemaVersion": 1,
   "id": "bmw.media",
   "name": "Apple Music Media",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "author": "Ben Walther",
-  "description": "Polished now-playing controls with artwork, timeline, volume, and media-source selection",
+  "description": "Apple-first MPRIS controls with artwork, seeking, source selection, and a sleep timer",
   "kinds": ["bar-widget"],
   "keepLoaded": true,
   "entryPoints": { "barWidget": "BarWidget.qml" },
   "barWidget": {
     "displayName": "Apple Music Media",
-    "description": "Artwork-rich Apple Music and MPRIS controls",
+    "description": "Apple-first, capability-aware MPRIS controls",
     "category": "Media",
     "allowMultiple": false
   }

@@ -2,12 +2,13 @@
 Version=1.0
 Name=Apple Music
 GenericName=Music Player
-Comment=Omarchy-native Apple Music player powered by MusicKit
+Comment=Apple Music web player with Omarchy media controls
 Exec=@REPO@/bin/omarchy-music
 Terminal=false
 Type=Application
 Icon=omarchy-applemusicplayer
-StartupWMClass=chrome-applemusic.localhost__-Default
+StartupWMClass=chrome-music.apple.com__-Default
 StartupNotify=true
 Categories=Audio;Music;Player;
-Keywords=Apple;Music;MusicKit;Player;
+Keywords=Apple;Music;Web;Player;
+X-Omarchy-AppleMusicPlayer=true

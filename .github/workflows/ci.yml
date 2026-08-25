@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Static checks
+        run: |
+          bash -n bin/omarchy-music scripts/install.sh scripts/uninstall.sh
+          jq empty package.json integration/omarchy-plugin/manifest.json
+          git diff --check
+      - name: Tests
+        run: bun test
