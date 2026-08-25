@@ -9,7 +9,7 @@ CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy-applemusicplayer/config.j
 # MusicKit playback needs credentials from a paid Apple Developer membership.
 # Until they exist, use Apple's official web player and keep the same shortcut.
 if [[ ! -s "$CONFIG_FILE" ]] || ! jq -e '.teamId and .keyId and .privateKey' "$CONFIG_FILE" >/dev/null 2>&1; then
-  exec omarchy launch or focus webapp "music.apple.com" "https://music.apple.com/"
+  exec omarchy launch or focus webapp "chrome-music.apple.com__-Default" "https://music.apple.com/"
 fi
 
 systemctl --user start omarchy-applemusicplayer.service
