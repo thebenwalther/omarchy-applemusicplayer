@@ -231,11 +231,7 @@ BarWidget {
       cursorShape: Qt.PointingHandCursor
       acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
 
-      onClicked: function(mouse) {
-        if (mouse.button === Qt.RightButton) root.popupOpen = !root.popupOpen
-        else if (mouse.button === Qt.MiddleButton) root.command("next")
-        else root.command("toggle")
-      }
+      onClicked: root.popupOpen = !root.popupOpen
       onWheel: function(wheel) {
         if (root.volumeSupported) root.setVolume(root.volume + (wheel.angleDelta.y > 0 ? 0.05 : -0.05))
         else if (wheel.angleDelta.y > 0) root.command("previous")
@@ -243,8 +239,8 @@ BarWidget {
       }
       onEntered: if (root.bar) root.bar.showTooltip(root, root.hasMedia
         ? root.title + (root.artist ? " — " + root.artist : "")
-          + "\nLeft: play/pause · Middle: next · Right: details · Scroll: volume"
-        : "Apple Music · idle\nRight: details")
+          + "\nClick: controls · Scroll: volume"
+        : "Apple Music · idle\nClick: controls")
       onExited: if (root.bar) root.bar.hideTooltip(root)
     }
   }

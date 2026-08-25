@@ -51,9 +51,7 @@ The file and its parent directory are restricted to the current user. Apple acco
 | --- | --- |
 | `SUPER + SHIFT + M` | Launch or focus Apple Music |
 | `SUPER + ALT + M` | Toggle the MusicKit mini player when configured |
-| Bar left click | Play or pause |
-| Bar middle click | Next track |
-| Bar right click | Open now-playing details |
+| Any bar click | Toggle now-playing details and controls |
 | Bar scroll | Adjust volume, or change tracks when volume is unavailable |
 | Hardware media keys | Previous, play/pause, and next through MPRIS |
 
