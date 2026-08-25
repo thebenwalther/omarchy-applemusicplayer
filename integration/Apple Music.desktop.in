@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=Apple Music
+GenericName=Music Player
+Comment=Omarchy-native Apple Music player powered by MusicKit
+Exec=@REPO@/bin/omarchy-music
+Terminal=false
+Type=Application
+Icon=omarchy-applemusicplayer
+StartupWMClass=chrome-applemusic.localhost__-Default
+StartupNotify=true
+Categories=Audio;Music;Player;
+Keywords=Apple;Music;MusicKit;Player;

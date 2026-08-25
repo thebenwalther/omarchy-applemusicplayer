@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_URL="http://applemusic.localhost:17689/"
+HEALTH_URL="http://127.0.0.1:17689/api/health"
+PROFILE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/omarchy-applemusicplayer/chromium"
+
+systemctl --user start omarchy-applemusicplayer.service
+for _ in {1..40}; do
+  curl --silent --fail --max-time 1 "$HEALTH_URL" >/dev/null 2>&1 && break
+  sleep 0.1
+done
+
+mkdir -p "$PROFILE_DIR"
+LAUNCH_COMMAND="uwsm-app -- chromium --app=$APP_URL --user-data-dir=$PROFILE_DIR --no-first-run --disable-session-crashed-bubble"
+exec omarchy launch or focus "chrome-applemusic.localhost__-Default" "$LAUNCH_COMMAND"

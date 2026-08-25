@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+COMMAND="${1:-}"
+VALUE="${2:-}"
+case "$COMMAND" in
+  play|pause|toggle|previous|next|shuffle|repeat|open-player) ;;
+  seek|volume|play-index|remove-index) [[ -n $VALUE ]] || { echo "A value is required for $COMMAND" >&2; exit 2; } ;;
+  *) echo "Usage: omarchy-applemusicctl {play|pause|toggle|previous|next|shuffle|repeat|seek|volume|play-index|remove-index} [value]" >&2; exit 2 ;;
+esac
+
+if [[ -n $VALUE ]]; then
+  PAYLOAD=$(jq -nc --arg command "$COMMAND" --argjson value "$VALUE" '{command:$command,value:$value}')
+else
+  PAYLOAD=$(jq -nc --arg command "$COMMAND" '{command:$command}')
+fi
+
+curl --silent --show-error --fail \
+  -H 'Content-Type: application/json' \
+  -H 'X-Omarchy-AppleMusic: 1' \
+  --data "$PAYLOAD" \
+  http://127.0.0.1:17689/api/command >/dev/null
