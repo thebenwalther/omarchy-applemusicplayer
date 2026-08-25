@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls as QQC
+import QtQuick.Effects
 import Quickshell.Services.Mpris
 import qs.Ui
 import qs.Commons
@@ -14,6 +15,21 @@ PopupCard {
   property string applePlayerKey: ""
   property string sleepMode: ""
   property string sleepLabel: ""
+  property color artworkAccent: Color.accent
+  property bool dynamicArtworkColor: true
+  property bool barProgressEnabled: true
+  property bool motionEnabled: true
+  property bool trackChangeOsd: false
+  property bool rememberSessionHistory: true
+  property var recentHistory: []
+  property bool copyAvailable: false
+
+  property bool moreOpen: false
+  property bool sourcesOpen: false
+  property string displayedArtUrl: ""
+  property string previousArtUrl: ""
+  property real artReveal: 1
+  property real metadataReveal: 1
 
   readonly property bool hasPlayer: player !== null
   readonly property bool hasMedia: hasPlayer && !!(player.trackTitle || player.trackArtist)
@@ -22,6 +38,7 @@ PopupCard {
   readonly property string title: hasMedia ? String(player.trackTitle || "Unknown title") : "Apple Music"
   readonly property string artist: hasMedia ? String(player.trackArtist || "Unknown artist") : "Open Apple Music to start playback"
   readonly property string album: hasMedia ? String(player.trackAlbum || "") : ""
+  readonly property string metadataSignature: [title, artist, album].join("\u001f")
   readonly property string artUrl: hasMedia ? String(player.trackArtUrl || "") : ""
   readonly property real position: hasPlayer && player.positionSupported ? Number(player.position || 0) : 0
   readonly property real duration: hasPlayer && player.lengthSupported ? Number(player.length || 0) : 0
@@ -30,6 +47,10 @@ PopupCard {
   readonly property bool canSeek: hasPlayer && player.canSeek && player.positionSupported
   readonly property bool canToggle: hasPlayer && (player.canTogglePlaying || player.canPlay || player.canPause)
   readonly property bool showModes: modeCapabilities.shuffle || modeCapabilities.loop
+  readonly property string layoutMode: MediaController.layoutMode(contentWidth)
+  readonly property bool narrow: layoutMode === "narrow"
+  readonly property color popupText: Color.popups.text
+  readonly property color mutedText: Qt.darker(Color.popups.text, 1.4)
 
   signal actionRequested(string action)
   signal seekRequested(real value)
@@ -42,16 +63,69 @@ PopupCard {
   signal timerMinutesRequested(int minutes)
   signal timerEndTrackRequested()
   signal timerCancelRequested()
+  signal copyRequested(var value)
+  signal historyClearRequested()
+  signal preferenceRequested(string key, bool value)
   signal openAppleMusicRequested()
   signal popupActivated()
 
-  contentWidth: fittedContentWidth(Style.space(440))
-  contentHeight: fittedContentHeight(contentColumn.implicitHeight, Style.space(720))
+  contentWidth: fittedContentWidth(Style.space(520))
+  contentHeight: fittedContentHeight(contentColumn.implicitHeight, Style.space(760))
+  borderColor: root.dynamicArtworkColor ? root.artworkAccent : Color.popups.border
+
+  function swapArtwork() {
+    if (displayedArtUrl === artUrl) return
+    previousArtUrl = displayedArtUrl
+    displayedArtUrl = artUrl
+    if (!motionEnabled || previousArtUrl === "") {
+      artReveal = 1
+      previousArtUrl = ""
+      return
+    }
+    artReveal = 0
+    artworkTransition.restart()
+  }
+
+  onArtUrlChanged: swapArtwork()
+  onMetadataSignatureChanged: {
+    if (!motionEnabled) return
+    metadataReveal = 0
+    metadataTransition.restart()
+  }
+  onMotionEnabledChanged: if (!motionEnabled) {
+    artworkTransition.stop()
+    metadataTransition.stop()
+    artReveal = 1
+    metadataReveal = 1
+    previousArtUrl = ""
+  }
+  Component.onCompleted: swapArtwork()
 
   FocusScope {
     id: keyScope
     anchors.fill: parent
     focus: root.open
+
+    NumberAnimation {
+      id: artworkTransition
+      target: root
+      property: "artReveal"
+      from: 0
+      to: 1
+      duration: 220
+      easing.type: Easing.OutCubic
+      onFinished: root.previousArtUrl = ""
+    }
+
+    NumberAnimation {
+      id: metadataTransition
+      target: root
+      property: "metadataReveal"
+      from: 0
+      to: 1
+      duration: 200
+      easing.type: Easing.OutCubic
+    }
 
     Connections {
       target: root
@@ -103,47 +177,100 @@ PopupCard {
         spacing: Style.space(12)
 
         BorderSurface {
+          id: hero
           width: parent.width
-          height: Style.space(148)
+          height: root.narrow ? Style.space(166) : Style.space(200)
           radius: Style.cornerRadius
-          color: Style.normalFillFor(root.bar.foreground, Color.accent)
-          borderSpec: Border.controlSpec("normal", root.bar.foreground, Color.accent)
+          color: Style.normalFillFor(root.popupText, root.artworkAccent)
+          borderSpec: Border.flat(Util.alpha(root.artworkAccent, 0.65), Math.max(1, Style.space(1)))
+          clip: true
+
+          Image {
+            id: backdropSource
+            anchors.fill: parent
+            source: root.displayedArtUrl
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            visible: false
+          }
+
+          MultiEffect {
+            anchors.fill: parent
+            source: backdropSource
+            visible: root.displayedArtUrl !== "" && backdropSource.status === Image.Ready
+            autoPaddingEnabled: false
+            blurEnabled: true
+            blur: 1
+            blurMax: 64
+            blurMultiplier: 1.25
+            saturation: 0.25
+            brightness: -0.35
+          }
+
+          Rectangle {
+            anchors.fill: parent
+            color: Util.alpha(Color.popups.background, root.displayedArtUrl === "" ? 0.72 : 0.58)
+          }
+
+          Rectangle {
+            anchors.fill: parent
+            opacity: root.dynamicArtworkColor ? 1 : 0
+            gradient: Gradient {
+              GradientStop { position: 0; color: Util.alpha(root.artworkAccent, 0.26) }
+              GradientStop { position: 0.72; color: "transparent" }
+            }
+            Behavior on opacity { enabled: root.motionEnabled; NumberAnimation { duration: 180 } }
+          }
 
           Row {
             anchors.fill: parent
-            anchors.margins: Style.space(10)
-            spacing: Style.space(14)
+            anchors.margins: Style.space(12)
+            spacing: Style.space(16)
 
             BorderSurface {
+              id: artworkFrame
               width: parent.height
               height: parent.height
               radius: Style.cornerRadius
-              color: Style.selectedFillFor(root.bar.foreground, Color.accent)
-              borderSpec: Border.none()
+              color: Style.selectedFillFor(root.popupText, root.artworkAccent)
+              borderSpec: Border.flat(Util.alpha(root.artworkAccent, 0.85), Math.max(1, Style.space(2)))
               clip: true
 
               Image {
                 anchors.fill: parent
+                source: root.previousArtUrl
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
-                source: root.artUrl
+                opacity: 1 - root.artReveal
+                visible: source !== "" && opacity > 0
+              }
+
+              Image {
+                anchors.fill: parent
+                source: root.displayedArtUrl
+                fillMode: Image.PreserveAspectCrop
+                asynchronous: true
+                opacity: root.artReveal
+                scale: root.motionEnabled ? 0.98 + root.artReveal * 0.02 : 1
                 visible: source !== ""
               }
 
               Text {
                 anchors.centerIn: parent
-                visible: root.artUrl === ""
+                visible: root.displayedArtUrl === ""
                 text: "󰝚"
-                color: root.bar.foreground
+                color: root.popupText
                 font.family: root.bar.fontFamily
                 font.pixelSize: Style.font.displayLarge
               }
             }
 
             Column {
-              width: parent.width - parent.height - Style.space(14)
-              spacing: Style.space(5)
+              width: parent.width - artworkFrame.width - parent.spacing
+              spacing: Style.space(6)
               anchors.verticalCenter: parent.verticalCenter
+              opacity: root.motionEnabled ? 0.35 + root.metadataReveal * 0.65 : 1
+              scale: root.motionEnabled ? 0.98 + root.metadataReveal * 0.02 : 1
 
               Row {
                 width: parent.width
@@ -153,14 +280,14 @@ PopupCard {
                   width: Style.space(7)
                   height: width
                   radius: width / 2
-                  color: root.player && root.player.isPlaying ? Color.accent : Qt.darker(root.bar.foreground, 1.5)
+                  color: root.player && root.player.isPlaying ? root.artworkAccent : root.mutedText
                   anchors.verticalCenter: parent.verticalCenter
                 }
 
                 Text {
                   width: parent.width - Style.space(14)
                   text: (root.player && root.player.isPlaying ? "NOW PLAYING · " : "") + root.sourceName.toUpperCase()
-                  color: root.player && root.player.isPlaying ? Color.accent : Qt.darker(root.bar.foreground, 1.35)
+                  color: root.player && root.player.isPlaying ? root.artworkAccent : root.mutedText
                   font.family: root.bar.fontFamily
                   font.pixelSize: Style.font.caption
                   font.bold: true
@@ -171,17 +298,19 @@ PopupCard {
               Text {
                 width: parent.width
                 text: root.title
-                color: root.bar.foreground
+                color: root.popupText
                 font.family: root.bar.fontFamily
-                font.pixelSize: Style.font.title
+                font.pixelSize: root.narrow ? Style.font.subtitle : Style.font.title
                 font.bold: true
                 elide: Text.ElideRight
+                maximumLineCount: 2
+                wrapMode: Text.Wrap
               }
 
               Text {
                 width: parent.width
                 text: root.artist
-                color: root.bar.foreground
+                color: root.popupText
                 font.family: root.bar.fontFamily
                 font.pixelSize: Style.font.body
                 elide: Text.ElideRight
@@ -190,7 +319,7 @@ PopupCard {
               Text {
                 width: parent.width
                 text: root.album
-                color: Qt.darker(root.bar.foreground, 1.45)
+                color: root.mutedText
                 font.family: root.bar.fontFamily
                 font.pixelSize: Style.font.bodySmall
                 elide: Text.ElideRight
@@ -212,6 +341,9 @@ PopupCard {
             minimum: 0
             maximum: Math.max(1, root.duration)
             step: 5
+            fillColor: root.artworkAccent
+            knobColor: root.popupText
+            trackColor: Util.alpha(root.popupText, 0.22)
             enabled: root.canSeek
             opacity: enabled ? 1 : 0.55
             onReleased: function(value) { root.seekRequested(value) }
@@ -225,15 +357,14 @@ PopupCard {
               id: elapsed
               anchors.left: parent.left
               text: MediaController.formatTime(root.position)
-              color: Qt.darker(root.bar.foreground, 1.45)
+              color: root.mutedText
               font.family: root.bar.fontFamily
               font.pixelSize: Style.font.caption
             }
-
             Text {
               anchors.right: parent.right
-              text: MediaController.formatTime(root.duration)
-              color: Qt.darker(root.bar.foreground, 1.45)
+              text: "−" + MediaController.formatTime(Math.max(0, root.duration - root.position))
+              color: root.mutedText
               font.family: root.bar.fontFamily
               font.pixelSize: Style.font.caption
             }
@@ -242,12 +373,13 @@ PopupCard {
 
         Row {
           anchors.horizontalCenter: parent.horizontalCenter
-          spacing: Style.space(7)
+          spacing: Style.space(9)
           visible: root.hasPlayer
 
           Button {
             iconText: "󰒮"
-            foreground: root.bar.foreground
+            foreground: root.popupText
+            accent: root.artworkAccent
             focusable: true
             enabled: root.player && root.player.canGoPrevious
             opacity: enabled ? 1 : 0.35
@@ -256,7 +388,8 @@ PopupCard {
           }
           Button {
             text: "−10"
-            foreground: root.bar.foreground
+            foreground: root.popupText
+            accent: root.artworkAccent
             focusable: true
             enabled: root.canSeek
             opacity: enabled ? 1 : 0.35
@@ -265,12 +398,13 @@ PopupCard {
           }
           Button {
             iconText: root.player && root.player.isPlaying ? "󰏤" : "󰐊"
-            foreground: root.bar.foreground
-            background: Style.selectedFillFor(root.bar.foreground, Color.accent)
+            foreground: root.popupText
+            accent: root.artworkAccent
+            background: Util.alpha(root.artworkAccent, 0.2)
             bordered: true
             focusable: true
-            horizontalPadding: Style.space(14)
-            verticalPadding: Style.space(9)
+            horizontalPadding: Style.space(17)
+            verticalPadding: Style.space(11)
             iconSize: Style.font.iconLarge
             enabled: root.canToggle
             opacity: enabled ? 1 : 0.35
@@ -279,7 +413,8 @@ PopupCard {
           }
           Button {
             text: "+10"
-            foreground: root.bar.foreground
+            foreground: root.popupText
+            accent: root.artworkAccent
             focusable: true
             enabled: root.canSeek
             opacity: enabled ? 1 : 0.35
@@ -288,7 +423,8 @@ PopupCard {
           }
           Button {
             iconText: "󰒭"
-            foreground: root.bar.foreground
+            foreground: root.popupText
+            accent: root.artworkAccent
             focusable: true
             enabled: root.player && root.player.canGoNext
             opacity: enabled ? 1 : 0.35
@@ -305,7 +441,8 @@ PopupCard {
           Button {
             text: root.player && root.player.shuffle ? "Shuffle on" : "Shuffle"
             iconText: "󰒟"
-            foreground: root.bar.foreground
+            foreground: root.popupText
+            accent: root.artworkAccent
             focusable: true
             selected: root.player && root.player.shuffleSupported && root.player.shuffle
             visible: root.modeCapabilities.shuffle
@@ -314,7 +451,8 @@ PopupCard {
           Button {
             text: root.player && root.player.loopState === MprisLoopState.Track ? "Repeat one" : "Repeat"
             iconText: root.player && root.player.loopState === MprisLoopState.Track ? "󰑘" : "󰑖"
-            foreground: root.bar.foreground
+            foreground: root.popupText
+            accent: root.artworkAccent
             focusable: true
             selected: root.player && root.player.loopSupported && root.player.loopState !== MprisLoopState.None
             visible: root.modeCapabilities.loop
@@ -329,7 +467,8 @@ PopupCard {
 
           Button {
             iconText: root.volume <= 0.01 ? "󰝟" : (root.volume < 0.5 ? "󰕿" : "󰕾")
-            foreground: root.bar.foreground
+            foreground: root.popupText
+            accent: root.artworkAccent
             focusable: true
             tooltipText: root.volume <= 0.01 ? "Unmute" : "Mute"
             onClicked: root.muteRequested()
@@ -341,6 +480,9 @@ PopupCard {
             minimum: 0
             maximum: 1
             step: 0.05
+            fillColor: root.artworkAccent
+            knobColor: root.popupText
+            trackColor: Util.alpha(root.popupText, 0.22)
             onMoved: function(value) { root.volumeRequested(value) }
             onReleased: function(value) { root.volumeRequested(value) }
             onRightClicked: root.muteRequested()
@@ -348,7 +490,7 @@ PopupCard {
           Text {
             width: Style.space(42)
             text: Math.round(root.volume * 100) + "%"
-            color: Qt.darker(root.bar.foreground, 1.25)
+            color: root.mutedText
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.bodySmall
             horizontalAlignment: Text.AlignRight
@@ -356,71 +498,54 @@ PopupCard {
           }
         }
 
-        PanelSeparator {
-          visible: root.hasPlayer
-          foreground: root.bar.foreground
-        }
-
-        Column {
+        Row {
           width: parent.width
           spacing: Style.space(6)
-          visible: root.hasPlayer
 
-          Row {
-            width: parent.width
-            spacing: Style.space(8)
-            Text {
-              text: "SLEEP TIMER"
-              color: Qt.darker(root.bar.foreground, 1.35)
-              font.family: root.bar.fontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: true
-            }
-            Text {
-              width: parent.width - Style.space(90)
-              text: root.sleepLabel
-              color: Color.accent
-              font.family: root.bar.fontFamily
-              font.pixelSize: Style.font.caption
-              elide: Text.ElideRight
-              horizontalAlignment: Text.AlignRight
-            }
+          Button {
+            id: sourceChip
+            visible: root.sourcePlayers.length > 1
+            text: root.sourceName
+            iconText: "󰓃"
+            foreground: root.popupText
+            accent: root.artworkAccent
+            selected: root.sourcesOpen
+            focusable: true
+            onClicked: root.sourcesOpen = !root.sourcesOpen
           }
-
-          Row {
-            spacing: Style.space(5)
-            Button { text: "15m"; foreground: root.bar.foreground; focusable: true; onClicked: root.timerMinutesRequested(15) }
-            Button { text: "30m"; foreground: root.bar.foreground; focusable: true; onClicked: root.timerMinutesRequested(30) }
-            Button { text: "60m"; foreground: root.bar.foreground; focusable: true; onClicked: root.timerMinutesRequested(60) }
-            Button { text: "End of track"; foreground: root.bar.foreground; focusable: true; onClicked: root.timerEndTrackRequested() }
-            Button {
-              text: "Off"
-              foreground: root.bar.foreground
-              focusable: true
-              enabled: root.sleepMode !== ""
-              opacity: enabled ? 1 : 0.35
-              onClicked: root.timerCancelRequested()
-            }
+          Button {
+            id: sleepChip
+            visible: root.sleepMode !== ""
+            text: root.sleepLabel
+            iconText: "󰔛"
+            foreground: root.popupText
+            accent: root.artworkAccent
+            selected: true
+            focusable: true
+            onClicked: root.moreOpen = true
           }
-        }
-
-        PanelSeparator {
-          visible: root.sourcePlayers.length > 1
-          foreground: root.bar.foreground
+          Item {
+            width: Math.max(0, parent.width
+              - (sourceChip.visible ? sourceChip.implicitWidth + parent.spacing : 0)
+              - (sleepChip.visible ? sleepChip.implicitWidth + parent.spacing : 0)
+              - moreButton.implicitWidth)
+            height: 1
+          }
+          Button {
+            id: moreButton
+            text: root.moreOpen ? "Less" : "More"
+            iconText: root.moreOpen ? "󰅀" : "󰅂"
+            foreground: root.popupText
+            accent: root.artworkAccent
+            focusable: true
+            onClicked: root.moreOpen = !root.moreOpen
+          }
         }
 
         Column {
           width: parent.width
           spacing: Style.space(5)
-          visible: root.sourcePlayers.length > 1
-
-          Text {
-            text: "MEDIA SOURCES"
-            color: Qt.darker(root.bar.foreground, 1.45)
-            font.family: root.bar.fontFamily
-            font.pixelSize: Style.font.caption
-            font.bold: true
-          }
+          visible: root.sourcesOpen && root.sourcePlayers.length > 1
 
           Repeater {
             model: root.sourcePlayers
@@ -430,24 +555,196 @@ PopupCard {
               width: contentColumn.width
               text: MediaController.sourceName(modelData, root.applePlayerKey) + " · " + MediaController.sourceDetail(modelData)
               iconText: modelData && modelData.isPlaying ? "󰏤" : "󰐊"
-              foreground: root.bar.foreground
+              foreground: root.popupText
+              accent: root.artworkAccent
               leftAlign: true
               focusable: true
               selected: key === root.selectedKey
               bordered: selected
-              onClicked: root.sourceRequested(key)
+              onClicked: {
+                root.sourceRequested(key)
+                root.sourcesOpen = false
+              }
             }
           }
         }
 
-        Button {
+        Row {
           width: parent.width
-          text: "Open Apple Music"
-          iconText: "󰎆"
-          foreground: root.bar.foreground
-          bordered: true
-          focusable: true
-          onClicked: root.openAppleMusicRequested()
+          spacing: Style.space(7)
+
+          Button {
+            width: Math.max(1, (parent.width - parent.spacing) * 0.68)
+            text: "Open Apple Music"
+            iconText: "󰎆"
+            foreground: root.popupText
+            accent: root.artworkAccent
+            background: Util.alpha(root.artworkAccent, 0.14)
+            bordered: true
+            focusable: true
+            onClicked: root.openAppleMusicRequested()
+          }
+          Button {
+            width: Math.max(1, (parent.width - parent.spacing) * 0.32)
+            text: "Copy"
+            iconText: "󰆏"
+            foreground: root.popupText
+            accent: root.artworkAccent
+            bordered: true
+            focusable: true
+            enabled: root.copyAvailable && root.hasMedia
+            opacity: enabled ? 1 : 0.35
+            tooltipText: root.copyAvailable ? "Copy now playing" : "wl-copy is unavailable"
+            onClicked: root.copyRequested(root.player)
+          }
+        }
+
+        Column {
+          width: parent.width
+          spacing: Style.space(10)
+          visible: root.moreOpen
+
+          PanelSeparator { width: parent.width; foreground: root.popupText }
+
+          Text {
+            text: "SLEEP TIMER"
+            color: root.mutedText
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.caption
+            font.bold: true
+          }
+
+          Row {
+            spacing: Style.space(6)
+            visible: root.hasPlayer
+            Button { text: "15m"; foreground: root.popupText; accent: root.artworkAccent; focusable: true; onClicked: root.timerMinutesRequested(15) }
+            Button { text: "30m"; foreground: root.popupText; accent: root.artworkAccent; focusable: true; onClicked: root.timerMinutesRequested(30) }
+            Button { text: "60m"; foreground: root.popupText; accent: root.artworkAccent; focusable: true; onClicked: root.timerMinutesRequested(60) }
+            Button { text: "End of track"; foreground: root.popupText; accent: root.artworkAccent; focusable: true; onClicked: root.timerEndTrackRequested() }
+            Button {
+              text: "Off"
+              foreground: root.popupText
+              accent: root.artworkAccent
+              focusable: true
+              enabled: root.sleepMode !== ""
+              opacity: enabled ? 1 : 0.35
+              onClicked: root.timerCancelRequested()
+            }
+          }
+
+          Text {
+            width: parent.width
+            text: root.sleepMode === "" ? "Audio fades for five seconds before playback pauses." : root.sleepLabel
+            color: root.sleepMode === "" ? root.mutedText : root.artworkAccent
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.WordWrap
+          }
+
+          PanelSeparator { width: parent.width; foreground: root.popupText }
+
+          Row {
+            width: parent.width
+            Text {
+              width: parent.width - clearHistoryButton.implicitWidth - parent.spacing
+              text: "RECENT THIS SESSION"
+              color: root.mutedText
+              font.family: root.bar.fontFamily
+              font.pixelSize: Style.font.caption
+              font.bold: true
+            }
+            Button {
+              id: clearHistoryButton
+              text: "Clear"
+              foreground: root.popupText
+              accent: root.artworkAccent
+              focusable: true
+              enabled: root.recentHistory.length > 0
+              opacity: enabled ? 1 : 0.35
+              onClicked: root.historyClearRequested()
+            }
+          }
+
+          Text {
+            visible: root.recentHistory.length === 0
+            text: root.rememberSessionHistory ? "Tracks you play will appear here." : "Session history is turned off."
+            color: root.mutedText
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.bodySmall
+          }
+
+          Repeater {
+            model: root.recentHistory.slice(0, 5)
+            Button {
+              required property var modelData
+              width: contentColumn.width
+              text: MediaController.copyText(modelData).replace("\n", " · ")
+              iconText: "󰆏"
+              foreground: root.popupText
+              accent: root.artworkAccent
+              leftAlign: true
+              focusable: true
+              enabled: root.copyAvailable
+              tooltipText: "Copy track details"
+              onClicked: root.copyRequested(modelData)
+            }
+          }
+
+          PanelSeparator { width: parent.width; foreground: root.popupText }
+
+          Text {
+            text: "APPEARANCE & FEEDBACK"
+            color: root.mutedText
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.caption
+            font.bold: true
+          }
+
+          Toggle {
+            width: parent.width
+            label: "Artwork colors"
+            description: "Tint accents from the current album cover."
+            checked: root.dynamicArtworkColor
+            foreground: root.popupText
+            accent: root.artworkAccent
+            onClicked: root.preferenceRequested("dynamicArtworkColor", !root.dynamicArtworkColor)
+          }
+          Toggle {
+            width: parent.width
+            label: "Bar progress"
+            description: "Show a thin playback rail under the bar pill."
+            checked: root.barProgressEnabled
+            foreground: root.popupText
+            accent: root.artworkAccent
+            onClicked: root.preferenceRequested("barProgress", !root.barProgressEnabled)
+          }
+          Toggle {
+            width: parent.width
+            label: "Motion"
+            description: "Animate artwork, metadata, and progress changes."
+            checked: root.motionEnabled
+            foreground: root.popupText
+            accent: root.artworkAccent
+            onClicked: root.preferenceRequested("motionEnabled", !root.motionEnabled)
+          }
+          Toggle {
+            width: parent.width
+            label: "Track-change OSD"
+            description: "Show title and artist when the song changes."
+            checked: root.trackChangeOsd
+            foreground: root.popupText
+            accent: root.artworkAccent
+            onClicked: root.preferenceRequested("trackChangeOsd", !root.trackChangeOsd)
+          }
+          Toggle {
+            width: parent.width
+            label: "Session history"
+            description: "Remember up to ten tracks until the shell restarts."
+            checked: root.rememberSessionHistory
+            foreground: root.popupText
+            accent: root.artworkAccent
+            onClicked: root.preferenceRequested("rememberSessionHistory", !root.rememberSessionHistory)
+          }
         }
       }
     }

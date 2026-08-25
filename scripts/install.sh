@@ -97,13 +97,22 @@ shell_temp=$(mktemp "${SHELL_CONFIG}.omarchy-applemusicplayer.XXXXXX")
 jq '
   .bar = (.bar // {})
   | .bar.layout = (.bar.layout // {})
+  | ([.bar.layout[]?[]? | select(.id == "bmw.media")][0] // {}) as $existing
+  | ({
+      "id":"bmw.media",
+      "dynamicArtworkColor":true,
+      "barProgress":true,
+      "motionEnabled":true,
+      "trackChangeOsd":false,
+      "rememberSessionHistory":true
+    } + $existing + {"id":"bmw.media"}) as $media
   | .bar.layout |= with_entries(.value |= map(select(.id != "bmw.media")))
   | .bar.layout.center = (
       (.bar.layout.center // []) as $center
       | ($center | map(.id) | index("omarchy.clock")) as $clock
       | if $clock == null
-        then $center + [{"id":"bmw.media"}]
-        else $center[0:$clock] + [{"id":"bmw.media"}] + $center[$clock:]
+        then $center + [$media]
+        else $center[0:$clock] + [$media] + $center[$clock:]
         end
     )
 ' "$SHELL_CONFIG" > "$shell_temp"

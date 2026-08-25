@@ -29,6 +29,18 @@ BarWidget {
   property string sleepPlayerKey: ""
   property string sleepTrackSignature: ""
   property double sleepNowMs: Date.now()
+  property bool sleepFadeActive: false
+  property real sleepFadeOriginalVolume: 1
+
+  readonly property bool dynamicArtworkColor: setting("dynamicArtworkColor", true) === true
+  readonly property bool barProgressEnabled: setting("barProgress", true) === true
+  readonly property bool motionEnabled: setting("motionEnabled", true) === true
+  readonly property bool trackChangeOsd: setting("trackChangeOsd", false) === true
+  readonly property bool rememberSessionHistory: setting("rememberSessionHistory", true) === true
+  property color artworkAccent: Color.accent
+  property var recentHistory: []
+  property string observedTrackSignature: ""
+  property bool copyAvailable: false
 
   readonly property bool hasPlayer: currentPlayer !== null
   readonly property bool hasMedia: hasPlayer && !!(currentPlayer.trackTitle || currentPlayer.trackArtist)
@@ -41,8 +53,8 @@ BarWidget {
   readonly property real duration: hasPlayer && currentPlayer.lengthSupported ? Number(currentPlayer.length || 0) : 0
   readonly property real volume: hasPlayer && currentPlayer.volumeSupported ? Number(currentPlayer.volume ?? 1) : 1
   readonly property string sleepLabel: sleepMode === "deadline"
-    ? "Sleep in " + MediaController.timerRemaining(sleepDeadlineMs, sleepNowMs)
-    : (sleepMode === "track" ? "Sleep at end of track" : "")
+    ? (sleepFadeActive ? "Fading out" : "Sleep in " + MediaController.timerRemaining(sleepDeadlineMs, sleepNowMs))
+    : (sleepMode === "track" ? (sleepFadeActive ? "Fading at track end" : "Sleep at end of track") : "")
 
   function open() {
     popupOpen = true
@@ -74,6 +86,49 @@ BarWidget {
     mediaService.selectPlayer(key)
   }
 
+  function updatePreference(key, value) {
+    var entry = { id: moduleName }
+    for (var name in settings) if (name !== "id") entry[name] = settings[name]
+    entry[key] = value
+    settings = entry
+    if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function")
+      bar.shell.updateEntryInline(moduleName, entry)
+    if (key === "rememberSessionHistory" && value !== true) recentHistory = []
+    if (key === "dynamicArtworkColor" && value !== true) artworkAccent = Color.accent
+  }
+
+  function showOsd(icon, message, duration) {
+    if (!bar || !bar.shell) return
+    bar.shell.summon("omarchy.osd", JSON.stringify({
+      icon: icon || "media",
+      message: message || "",
+      duration: duration || 1800
+    }))
+  }
+
+  function captureCurrentTrack() {
+    if (!currentPlayer || !hasMedia) return
+    var signature = MediaController.trackSignature(currentPlayer)
+    if (!signature || signature === observedTrackSignature) return
+    var hadPrevious = observedTrackSignature !== ""
+    observedTrackSignature = signature
+    if (rememberSessionHistory)
+      recentHistory = MediaController.addHistory(recentHistory, currentPlayer, 10, Date.now())
+    if (hadPrevious && trackChangeOsd)
+      showOsd("media", MediaController.copyText(currentPlayer).split("\n")[0], 1800)
+  }
+
+  function clearHistory() { recentHistory = [] }
+
+  function copyMetadata(value) {
+    if (!copyAvailable || copyProcess.running) return
+    var text = MediaController.copyText(value)
+    if (!text) return
+    copyProcess.command = ["wl-copy", text]
+    copyProcess.running = true
+    showOsd("󰆏", "Copied now playing", 1200)
+  }
+
   function runAction(action, targetKey) {
     if (!mediaService) return
     mediaService.runAction(action, false, targetKey || currentKey)
@@ -92,6 +147,7 @@ BarWidget {
 
   function setVolume(value) {
     if (!currentPlayer || !currentPlayer.volumeSupported) return
+    if (sleepFadeActive) cancelSleepTimer()
     var level = Math.max(0, Math.min(1, Number(value || 0)))
     currentPlayer.volume = level
     if (level > 0.01) lastAudibleVolume = level
@@ -116,6 +172,7 @@ BarWidget {
 
   function startSleepMinutes(minutes) {
     if (!currentPlayer) return
+    cancelSleepTimer()
     sleepMode = "deadline"
     sleepNowMs = Date.now()
     sleepDeadlineMs = MediaController.timerDeadline(minutes, sleepNowMs)
@@ -125,6 +182,7 @@ BarWidget {
 
   function startSleepAtTrackEnd() {
     if (!currentPlayer) return
+    cancelSleepTimer()
     sleepMode = "track"
     sleepNowMs = Date.now()
     sleepDeadlineMs = 0
@@ -132,12 +190,19 @@ BarWidget {
     sleepTrackSignature = MediaController.trackSignature(currentPlayer)
   }
 
-  function cancelSleepTimer() {
+  function clearSleepTimer(restoreVolume) {
+    var target = playerForKey(sleepPlayerKey)
+    if (restoreVolume && sleepFadeActive && target && target.volumeSupported)
+      target.volume = sleepFadeOriginalVolume
     sleepMode = ""
     sleepDeadlineMs = 0
     sleepPlayerKey = ""
     sleepTrackSignature = ""
+    sleepFadeActive = false
+    sleepFadeOriginalVolume = 1
   }
+
+  function cancelSleepTimer() { clearSleepTimer(true) }
 
   function checkSleepTimer() {
     if (!sleepMode) return
@@ -148,12 +213,22 @@ BarWidget {
       return
     }
 
-    var shouldPause = sleepMode === "deadline"
-      ? sleepNowMs >= sleepDeadlineMs
-      : MediaController.endOfTrackReached(target, sleepTrackSignature, 1.5)
-    if (!shouldPause) return
+    var state = MediaController.timerPhase(sleepMode, sleepDeadlineMs, target, sleepTrackSignature, sleepNowMs, 5)
+    if (state.phase === "wait" || state.phase === "idle") return
+    if (state.phase === "fade") {
+      if (!target.volumeSupported) return
+      if (!sleepFadeActive) {
+        sleepFadeActive = true
+        sleepFadeOriginalVolume = Math.max(0, Math.min(1, Number(target.volume || 0)))
+      }
+      target.volume = MediaController.fadeVolume(sleepFadeOriginalVolume, state.progress)
+      return
+    }
+    if (state.phase !== "finish") return
     if (target.isPlaying) runAction("pause", sleepPlayerKey)
-    cancelSleepTimer()
+    if (sleepFadeActive && target.volumeSupported) target.volume = sleepFadeOriginalVolume
+    showOsd("media-pause", "Sleep timer finished", 1800)
+    clearSleepTimer(false)
   }
 
   function openAppleMusic() {
@@ -165,12 +240,48 @@ BarWidget {
   implicitWidth: compactSurface.width
   implicitHeight: barSize
 
-  Component.onCompleted: requestAppleProbe()
+  Component.onCompleted: {
+    requestAppleProbe()
+    copyProbe.running = true
+    historyCapture.restart()
+  }
   onSourcePlayersChanged: {
     requestAppleProbe()
     Qt.callLater(applySourcePreference)
   }
   onApplePidsChanged: Qt.callLater(applySourcePreference)
+  onCurrentPlayerChanged: historyCapture.restart()
+  onArtUrlChanged: if (!artUrl || !dynamicArtworkColor) artworkAccent = Color.accent
+  onDynamicArtworkColorChanged: {
+    if (!dynamicArtworkColor) artworkAccent = Color.accent
+    else if (artPalette.colors.length > 0)
+      artworkAccent = MediaController.bestArtworkAccent(artPalette.colors, Color.accent, Color.popups.background)
+  }
+  onRememberSessionHistoryChanged: if (!rememberSessionHistory) recentHistory = []
+
+  ColorQuantizer {
+    id: artPalette
+    source: root.dynamicArtworkColor ? root.artUrl : ""
+    depth: 4
+    rescaleSize: 64
+    onColorsChanged: root.artworkAccent = root.dynamicArtworkColor
+      ? MediaController.bestArtworkAccent(colors, Color.accent, Color.popups.background)
+      : Color.accent
+  }
+
+  Connections {
+    target: root.currentPlayer
+    function onTrackChanged() { historyCapture.restart() }
+    function onPostTrackChanged() { historyCapture.restart() }
+    function onMetadataChanged() { historyCapture.restart() }
+  }
+
+  Timer {
+    id: historyCapture
+    interval: 350
+    repeat: false
+    onTriggered: root.captureCurrentTrack()
+  }
 
   Process {
     id: windowProbe
@@ -186,15 +297,30 @@ BarWidget {
     }
   }
 
+  Process {
+    id: copyProbe
+    command: ["sh", "-c", "command -v wl-copy >/dev/null 2>&1"]
+    onExited: function(exitCode) { root.copyAvailable = exitCode === 0 }
+  }
+
+  Process { id: copyProcess }
+
   Timer {
     interval: 1000
     repeat: true
-    running: root.popupOpen || root.sleepMode !== ""
+    running: root.popupOpen || root.sleepMode !== "" || (root.barProgressEnabled && root.playing)
     onTriggered: {
       var timerPlayer = root.playerForKey(root.sleepPlayerKey) || root.currentPlayer
       if (timerPlayer && timerPlayer.positionSupported) timerPlayer.positionChanged()
       root.checkSleepTimer()
     }
+  }
+
+  Timer {
+    interval: 250
+    repeat: true
+    running: root.sleepFadeActive
+    onTriggered: root.checkSleepTimer()
   }
 
   IpcHandler {
@@ -215,12 +341,13 @@ BarWidget {
     width: compactRow.implicitWidth + Style.space(12)
     height: Math.min(root.barSize - Style.space(4), Style.space(30))
     radius: height / 2
-    color: root.popupOpen ? Style.selectedFillFor(root.bar.foreground, Color.accent)
-      : compactMouse.containsMouse ? Style.hoverFillFor(root.bar.foreground, Color.accent)
+    color: root.popupOpen ? Style.selectedFillFor(root.bar.foreground, root.artworkAccent)
+      : compactMouse.containsMouse ? Style.hoverFillFor(root.bar.foreground, root.artworkAccent)
       : "transparent"
-    borderSpec: root.popupOpen ? Border.controlSpec("selected", root.bar.foreground, Color.accent) : Border.none()
+    borderSpec: root.popupOpen ? Border.controlSpec("selected", root.bar.foreground, root.artworkAccent) : Border.none()
+    clip: true
 
-    Behavior on color { ColorAnimation { duration: 120 } }
+    Behavior on color { enabled: root.motionEnabled; ColorAnimation { duration: 160 } }
 
     Row {
       id: compactRow
@@ -231,8 +358,8 @@ BarWidget {
         width: Math.min(compactSurface.height - Style.space(4), Style.space(24))
         height: width
         radius: Style.space(5)
-        color: Style.normalFillFor(root.bar.foreground, Color.accent)
-        borderSpec: Border.controlSpec("normal", root.bar.foreground, Color.accent)
+        color: Style.normalFillFor(root.bar.foreground, root.artworkAccent)
+        borderSpec: Border.controlSpec("normal", root.bar.foreground, root.artworkAccent)
         clip: true
 
         Image {
@@ -280,10 +407,26 @@ BarWidget {
 
       Text {
         text: root.playing ? "󰏤" : "󰐊"
-        color: root.playing ? Color.accent : Qt.darker(root.bar.barForeground, 1.35)
+        color: root.playing ? root.artworkAccent : Qt.darker(root.bar.barForeground, 1.35)
         font.family: root.bar.fontFamily
         font.pixelSize: Style.font.bodySmall
         anchors.verticalCenter: parent.verticalCenter
+      }
+    }
+
+    Rectangle {
+      anchors.left: parent.left
+      anchors.bottom: parent.bottom
+      height: Math.max(1, Style.space(2))
+      width: root.barProgressEnabled && root.duration > 0
+        ? parent.width * Math.max(0, Math.min(1, root.position / root.duration)) : 0
+      radius: height / 2
+      color: root.artworkAccent
+      visible: root.barProgressEnabled && root.hasMedia && root.duration > 0
+      opacity: root.playing ? 0.95 : 0.55
+      Behavior on width {
+        enabled: root.motionEnabled
+        NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
       }
     }
 
@@ -305,6 +448,7 @@ BarWidget {
       }
       onEntered: if (root.bar) root.bar.showTooltip(root,
         (root.hasMedia ? root.title + (root.artist ? " — " + root.artist : "") : "Apple Music · idle")
+        + (root.duration > 0 ? "\n" + MediaController.formatTime(root.position) + " / " + MediaController.formatTime(root.duration) : "")
         + "\nClick: details · Scroll: " + (root.currentPlayer && root.currentPlayer.volumeSupported ? "volume" : "previous/next"))
       onExited: if (root.bar) root.bar.hideTooltip(root)
     }
@@ -322,6 +466,14 @@ BarWidget {
     applePlayerKey: root.applePlayerKey
     sleepMode: root.sleepMode
     sleepLabel: root.sleepLabel
+    artworkAccent: root.artworkAccent
+    dynamicArtworkColor: root.dynamicArtworkColor
+    barProgressEnabled: root.barProgressEnabled
+    motionEnabled: root.motionEnabled
+    trackChangeOsd: root.trackChangeOsd
+    rememberSessionHistory: root.rememberSessionHistory
+    recentHistory: root.recentHistory
+    copyAvailable: root.copyAvailable
 
     onActionRequested: function(action) { root.runAction(action) }
     onSeekRequested: function(value) { root.seekTo(value) }
@@ -334,6 +486,9 @@ BarWidget {
     onTimerMinutesRequested: function(minutes) { root.startSleepMinutes(minutes) }
     onTimerEndTrackRequested: root.startSleepAtTrackEnd()
     onTimerCancelRequested: root.cancelSleepTimer()
+    onCopyRequested: function(value) { root.copyMetadata(value) }
+    onHistoryClearRequested: root.clearHistory()
+    onPreferenceRequested: function(key, value) { root.updatePreference(key, value) }
     onOpenAppleMusicRequested: root.openAppleMusic()
     onPopupActivated: root.requestAppleProbe()
   }

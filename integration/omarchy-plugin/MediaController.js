@@ -91,6 +91,140 @@ function capabilities(player) {
   }
 }
 
+function preferenceDefaults() {
+  return {
+    dynamicArtworkColor: true,
+    barProgress: true,
+    motionEnabled: true,
+    trackChangeOsd: false,
+    rememberSessionHistory: true
+  }
+}
+
+function colorChannels(value) {
+  var text = String(value || "").trim()
+  var match = text.match(/^#([0-9a-f]{6}|[0-9a-f]{8})$/i)
+  if (!match) return null
+  var hex = match[1].length === 8 ? match[1].slice(2) : match[1]
+  return {
+    r: parseInt(hex.slice(0, 2), 16),
+    g: parseInt(hex.slice(2, 4), 16),
+    b: parseInt(hex.slice(4, 6), 16)
+  }
+}
+
+function channelLuminance(value) {
+  var channel = Number(value || 0) / 255
+  return channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4)
+}
+
+function relativeLuminance(value) {
+  var rgb = colorChannels(value)
+  if (!rgb) return -1
+  return 0.2126 * channelLuminance(rgb.r) + 0.7152 * channelLuminance(rgb.g) + 0.0722 * channelLuminance(rgb.b)
+}
+
+function contrastRatio(a, b) {
+  var left = relativeLuminance(a)
+  var right = relativeLuminance(b)
+  if (left < 0 || right < 0) return 0
+  return (Math.max(left, right) + 0.05) / (Math.min(left, right) + 0.05)
+}
+
+function colorSaturation(value) {
+  var rgb = colorChannels(value)
+  if (!rgb) return 0
+  var max = Math.max(rgb.r, rgb.g, rgb.b)
+  var min = Math.min(rgb.r, rgb.g, rgb.b)
+  return max === 0 ? 0 : (max - min) / max
+}
+
+function bestArtworkAccent(colors, fallback, background) {
+  var list = asArray(colors)
+  var best = ""
+  var bestScore = -1
+  for (var i = 0; i < list.length; i++) {
+    var candidate = String(list[i] || "")
+    var contrast = contrastRatio(candidate, background)
+    if (contrast < 3) continue
+    var score = colorSaturation(candidate) * 2 + Math.min(contrast, 7) / 7
+    if (score > bestScore) {
+      best = candidate
+      bestScore = score
+    }
+  }
+  return best || String(fallback || "#ffffff")
+}
+
+function layoutMode(width) {
+  return Number(width || 0) < 460 ? "narrow" : "wide"
+}
+
+function copyText(value) {
+  var title = String(value && (value.title || value.trackTitle) || "")
+  var artist = String(value && (value.artist || value.trackArtist) || "")
+  var album = String(value && (value.album || value.trackAlbum) || "")
+  var first = title && artist ? title + " — " + artist : title || artist
+  if (!first) return album
+  return first + (album ? "\n" + album : "")
+}
+
+function historyEntry(player, timestamp) {
+  if (!player || !(player.trackTitle || player.trackArtist)) return null
+  return {
+    signature: trackSignature(player),
+    title: String(player.trackTitle || ""),
+    artist: String(player.trackArtist || ""),
+    album: String(player.trackAlbum || ""),
+    source: String(player.identity || player.desktopEntry || "Media"),
+    timestamp: Number(timestamp || Date.now())
+  }
+}
+
+function addHistory(history, player, limit, timestamp) {
+  var nextEntry = historyEntry(player, timestamp)
+  var list = asArray(history).slice()
+  if (!nextEntry) return list
+  if (list.length > 0 && list[0].signature === nextEntry.signature) return list
+  list = list.filter(function(entry) { return entry && entry.signature !== nextEntry.signature })
+  list.unshift(nextEntry)
+  return list.slice(0, Math.max(1, Number(limit) || 10))
+}
+
+function fadeProgress(startMs, endMs, nowMs) {
+  var start = Number(startMs || 0)
+  var end = Number(endMs || 0)
+  if (end <= start) return Number(nowMs || 0) >= end ? 1 : 0
+  return Math.max(0, Math.min(1, (Number(nowMs || 0) - start) / (end - start)))
+}
+
+function fadeVolume(originalVolume, progress) {
+  return Math.max(0, Math.min(1, Number(originalVolume || 0) * (1 - Math.max(0, Math.min(1, Number(progress || 0))))))
+}
+
+function timerPhase(mode, deadlineMs, player, originalSignature, nowMs, fadeSeconds) {
+  if (!mode || !player) return { phase: "idle", progress: 0 }
+  var fadeMs = Math.max(0, Number(fadeSeconds || 5)) * 1000
+  if (mode === "deadline") {
+    var deadline = Number(deadlineMs || 0)
+    if (Number(nowMs || 0) >= deadline) return { phase: "finish", progress: 1 }
+    var start = deadline - fadeMs
+    if (Number(nowMs || 0) >= start) return { phase: "fade", progress: fadeProgress(start, deadline, nowMs) }
+    return { phase: "wait", progress: 0 }
+  }
+
+  if (mode === "track") {
+    if (trackSignature(player) !== String(originalSignature || "")) return { phase: "finish", progress: 1 }
+    var duration = Number(player.length || 0)
+    var position = Number(player.position || 0)
+    if (duration <= 0) return { phase: "wait", progress: 0 }
+    var remaining = duration - position
+    if (remaining <= 0.25) return { phase: "finish", progress: 1 }
+    if (remaining <= fadeMs / 1000) return { phase: "fade", progress: Math.max(0, Math.min(1, 1 - remaining / (fadeMs / 1000))) }
+  }
+  return { phase: "wait", progress: 0 }
+}
+
 function trackSignature(player) {
   if (!player) return ""
   return [player.trackTitle || "", player.trackArtist || "", player.trackAlbum || "", player.trackArtUrl || ""].join("\u001f")
@@ -135,6 +269,19 @@ if (typeof module !== "undefined") {
     sourceName: sourceName,
     sourceDetail: sourceDetail,
     capabilities: capabilities,
+    preferenceDefaults: preferenceDefaults,
+    colorChannels: colorChannels,
+    relativeLuminance: relativeLuminance,
+    contrastRatio: contrastRatio,
+    colorSaturation: colorSaturation,
+    bestArtworkAccent: bestArtworkAccent,
+    layoutMode: layoutMode,
+    copyText: copyText,
+    historyEntry: historyEntry,
+    addHistory: addHistory,
+    fadeProgress: fadeProgress,
+    fadeVolume: fadeVolume,
+    timerPhase: timerPhase,
     trackSignature: trackSignature,
     formatTime: formatTime,
     timerDeadline: timerDeadline,

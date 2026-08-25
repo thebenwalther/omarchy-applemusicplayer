@@ -67,4 +67,64 @@ describe("formatting and timers", () => {
     expect(controller.capabilities({ shuffleSupported: false, loopSupported: false })).toEqual({ shuffle: false, loop: false });
     expect(controller.capabilities({ shuffleSupported: true, loopSupported: false })).toEqual({ shuffle: true, loop: false });
   });
+
+  test("models deadline fade, completion, and restored-volume math", () => {
+    const track = player(50, { trackTitle: "Song", trackArtist: "Artist", length: 180, position: 30 });
+    expect(controller.timerPhase("deadline", 10_000, track, "", 4_000, 5)).toEqual({ phase: "wait", progress: 0 });
+    expect(controller.timerPhase("deadline", 10_000, track, "", 7_500, 5)).toEqual({ phase: "fade", progress: 0.5 });
+    expect(controller.fadeVolume(0.8, 0.5)).toBeCloseTo(0.4);
+    expect(controller.timerPhase("deadline", 10_000, track, "", 10_000, 5)).toEqual({ phase: "finish", progress: 1 });
+  });
+
+  test("models end-of-track fade and defensive track-change completion", () => {
+    const track = player(60, { trackTitle: "Song", trackArtist: "Artist", length: 180, position: 176 });
+    const signature = controller.trackSignature(track);
+    const fading = controller.timerPhase("track", 0, track, signature, 0, 5);
+    expect(fading.phase).toBe("fade");
+    expect(fading.progress).toBeCloseTo(0.2);
+    track.position = 179.9;
+    expect(controller.timerPhase("track", 0, track, signature, 0, 5).phase).toBe("finish");
+    track.position = 50;
+    track.trackTitle = "Next";
+    expect(controller.timerPhase("track", 0, track, signature, 0, 5).phase).toBe("finish");
+    expect(controller.timerPhase("track", 0, null, signature, 0, 5).phase).toBe("idle");
+  });
+});
+
+describe("cinematic presentation helpers", () => {
+  test("chooses a vivid contrasting artwork accent or falls back", () => {
+    const chosen = controller.bestArtworkAccent(["#222222", "#ff3366", "#777777"], "#abcdef", "#101010");
+    expect(chosen).toBe("#ff3366");
+    expect(controller.contrastRatio(chosen, "#101010")).toBeGreaterThanOrEqual(3);
+    expect(controller.bestArtworkAccent(["invalid", "#151515"], "#abcdef", "#101010")).toBe("#abcdef");
+  });
+
+  test("uses deterministic responsive thresholds and preference defaults", () => {
+    expect(controller.layoutMode(459)).toBe("narrow");
+    expect(controller.layoutMode(460)).toBe("wide");
+    expect(controller.preferenceDefaults()).toEqual({
+      dynamicArtworkColor: true,
+      barProgress: true,
+      motionEnabled: true,
+      trackChangeOsd: false,
+      rememberSessionHistory: true,
+    });
+  });
+
+  test("formats copy text and bounds deduplicated session history", () => {
+    const first = player(70, { trackTitle: "One", trackArtist: "Artist", trackAlbum: "Album" });
+    expect(controller.copyText(first)).toBe("One — Artist\nAlbum");
+    let history = controller.addHistory([], first, 3, 1);
+    history = controller.addHistory(history, first, 3, 2);
+    expect(history).toHaveLength(1);
+    for (let index = 2; index <= 5; index++) {
+      history = controller.addHistory(history, player(70, { trackTitle: String(index), trackArtist: "Artist" }), 3, index);
+    }
+    expect(history).toHaveLength(3);
+    expect(history.map((entry: { title: string }) => entry.title)).toEqual(["5", "4", "3"]);
+    history = controller.addHistory(history, player(70, { trackTitle: "4", trackArtist: "Artist" }), 3, 6);
+    expect(history.map((entry: { title: string }) => entry.title)).toEqual(["4", "5", "3"]);
+    expect(controller.copyText({ title: "Only title" })).toBe("Only title");
+    expect(controller.copyText({ album: "Only album" })).toBe("Only album");
+  });
 });
