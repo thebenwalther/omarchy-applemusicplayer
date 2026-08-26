@@ -1,5 +1,9 @@
 # Omarchy Apple Music Player
 
+[![CI](https://github.com/thebenwalther/omarchy-applemusicplayer/actions/workflows/ci.yml/badge.svg)](https://github.com/thebenwalther/omarchy-applemusicplayer/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/thebenwalther/omarchy-applemusicplayer)](https://github.com/thebenwalther/omarchy-applemusicplayer/releases/latest)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 An Apple-first media experience for Omarchy built around Apple's official web player and the desktop's existing MPRIS service. No paid Apple Developer account, developer token, or stored Apple credentials are required.
 
 ![Cinematic Apple Music bar and popup](docs/widget-preview.png)
@@ -21,14 +25,14 @@ An Apple-first media experience for Omarchy built around Apple's official web pl
 
 ## Requirements
 
-- Omarchy with Hyprland and `omarchy-shell`
+- Omarchy 4.0.1 or newer with Hyprland and `omarchy-shell`
 - Chromium or another browser supported by `omarchy launch ... webapp`
 - `jq` and a working Widevine CDM
 - An active Apple Music subscription
 
 Bun is optional and is only used to run the development test suite.
 
-The installed icon is local project artwork inspired by Apple Music's color palette; it is not an Apple-published trademark asset.
+This is an independent community project and is not affiliated with, endorsed by, or sponsored by Apple Inc. Apple Music is a trademark of Apple Inc. The installed icon is local project artwork inspired by Apple Music's color palette; it is not an Apple-published trademark asset.
 
 ## Install or upgrade
 
@@ -87,7 +91,7 @@ Chromium currently exposes Apple Music playback metadata and controls but not th
 
 Shuffle and repeat remain hidden when the browser does not expose those optional MPRIS properties. Offline downloads, guaranteed lossless playback, and Dolby Atmos are not provided by this integration.
 
-The pre-cinematic web/MPRIS release is recoverable at the annotated [`v3.0.0`](../../tree/v3.0.0) tag. The earlier custom MusicKit implementation remains available at [`musickit-prototype-v0.1`](../../tree/musickit-prototype-v0.1). Reviving MusicKit requires Apple Developer Program resources and signed [developer tokens](https://developer.apple.com/documentation/applemusicapi/generating-developer-tokens).
+The pre-cinematic web/MPRIS release is recoverable at the annotated [`v3.0.0`](../../tree/v3.0.0) tag. The earlier custom MusicKit experiment is archived at [`musickit-prototype-v0.1`](../../tree/musickit-prototype-v0.1); it is unsupported, is not part of the current installation, and contains no real Apple credentials. Reviving MusicKit requires Apple Developer Program resources and signed [developer tokens](https://developer.apple.com/documentation/applemusicapi/generating-developer-tokens).
 
 ## Development
 
@@ -98,6 +102,8 @@ jq empty integration/omarchy-plugin/manifest.json package.json
 ```
 
 Tests exercise source selection, PID correlation, artwork contrast and fallback, responsive thresholds, copy formatting, bounded history, every sleep-fade transition, launcher matching, clean installation, preference-preserving upgrades, idempotency, and uninstall in isolated XDG fixtures.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before proposing changes. Please use GitHub's private vulnerability reporting flow described in [SECURITY.md](SECURITY.md) for security-sensitive reports.
 
 ## Uninstall
 
