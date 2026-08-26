@@ -95,10 +95,21 @@ function preferenceDefaults() {
   return {
     dynamicArtworkColor: true,
     barProgress: true,
+    barDisplayMode: "full",
     motionEnabled: true,
     trackChangeOsd: false,
     rememberSessionHistory: true
   }
+}
+
+function normalizeBarDisplayMode(value) {
+  var mode = String(value || "").toLowerCase()
+  return mode === "compact" || mode === "title" || mode === "full" ? mode : "full"
+}
+
+function normalizePopupPage(value, opening) {
+  if (opening) return "player"
+  return String(value || "") === "more" ? "more" : "player"
 }
 
 function colorChannels(value) {
@@ -156,6 +167,14 @@ function bestArtworkAccent(colors, fallback, background) {
   return best || String(fallback || "#ffffff")
 }
 
+function artworkAccentUpdate(currentArtUrl, paletteArtUrl, colors, fallback, background) {
+  var current = String(currentArtUrl || "")
+  if (!current) return { apply: true, color: String(fallback || "#ffffff") }
+  if (current !== String(paletteArtUrl || "") || asArray(colors).length === 0)
+    return { apply: false, color: "" }
+  return { apply: true, color: bestArtworkAccent(colors, fallback, background) }
+}
+
 function layoutMode(width) {
   return Number(width || 0) < 460 ? "narrow" : "wide"
 }
@@ -189,6 +208,21 @@ function addHistory(history, player, limit, timestamp) {
   list = list.filter(function(entry) { return entry && entry.signature !== nextEntry.signature })
   list.unshift(nextEntry)
   return list.slice(0, Math.max(1, Number(limit) || 10))
+}
+
+function relativeTime(timestamp, nowMs) {
+  var elapsed = Math.max(0, Number(nowMs || Date.now()) - Number(timestamp || 0))
+  var minutes = Math.floor(elapsed / 60000)
+  if (minutes < 1) return "now"
+  if (minutes < 60) return minutes + "m ago"
+  var hours = Math.floor(minutes / 60)
+  if (hours < 24) return hours + "h ago"
+  return Math.floor(hours / 24) + "d ago"
+}
+
+function clampSleepMinutes(value) {
+  var minutes = Math.round(Number(value || 0) / 5) * 5
+  return Math.max(5, Math.min(180, minutes || 5))
 }
 
 function fadeProgress(startMs, endMs, nowMs) {
@@ -270,15 +304,20 @@ if (typeof module !== "undefined") {
     sourceDetail: sourceDetail,
     capabilities: capabilities,
     preferenceDefaults: preferenceDefaults,
+    normalizeBarDisplayMode: normalizeBarDisplayMode,
+    normalizePopupPage: normalizePopupPage,
     colorChannels: colorChannels,
     relativeLuminance: relativeLuminance,
     contrastRatio: contrastRatio,
     colorSaturation: colorSaturation,
     bestArtworkAccent: bestArtworkAccent,
+    artworkAccentUpdate: artworkAccentUpdate,
     layoutMode: layoutMode,
     copyText: copyText,
     historyEntry: historyEntry,
     addHistory: addHistory,
+    relativeTime: relativeTime,
+    clampSleepMinutes: clampSleepMinutes,
     fadeProgress: fadeProgress,
     fadeVolume: fadeVolume,
     timerPhase: timerPhase,

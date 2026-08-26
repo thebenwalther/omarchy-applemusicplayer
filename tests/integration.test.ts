@@ -30,7 +30,14 @@ function fixture() {
   mkdirSync(stubs);
   writeFileSync(join(config, "hypr", "bindings.lua"), `before\n-- omarchy-applemusicplayer:start\nold alt binding\n-- omarchy-applemusicplayer:end\nafter\n`);
   writeFileSync(join(config, "hypr", "hyprland.lua"), `base\n-- omarchy-applemusicplayer:start\nold mini rule\n-- omarchy-applemusicplayer:end\n`);
-  writeFileSync(join(config, "omarchy", "shell.json"), JSON.stringify({ bar: { layout: { left: [], center: [{ id: "bmw.media", dynamicArtworkColor: false, trackChangeOsd: true }, { id: "omarchy.clock" }], right: [] } } }));
+  writeFileSync(join(config, "omarchy", "shell.json"), JSON.stringify({ bar: { layout: { left: [], center: [{
+    id: "bmw.media",
+    dynamicArtworkColor: false,
+    barProgress: false,
+    motionEnabled: false,
+    trackChangeOsd: true,
+    rememberSessionHistory: false,
+  }, { id: "omarchy.clock" }], right: [] } } }));
   writeFileSync(join(config, "omarchy", "plugins", "bmw.media", "user-file"), "preserve me");
   writeFileSync(join(config, "omarchy", "plugins", "bmw.media.bak.omarchy-applemusicplayer-old", "old-backup"), "preserve me too");
   mkdirSync(join(config, "omarchy-applemusicplayer"), { recursive: true });
@@ -82,10 +89,11 @@ describe("installer lifecycle", () => {
     expect(shell.bar.layout.center[0]).toEqual({
       id: "bmw.media",
       dynamicArtworkColor: false,
-      barProgress: true,
-      motionEnabled: true,
+      barProgress: false,
+      barDisplayMode: "full",
+      motionEnabled: false,
       trackChangeOsd: true,
-      rememberSessionHistory: true,
+      rememberSessionHistory: false,
     });
     const backups = join(f.state, "omarchy-applemusicplayer", "backups");
     expect(existsSync(backups)).toBe(true);
@@ -100,7 +108,11 @@ describe("installer lifecycle", () => {
     const shellAgain = JSON.parse(readFileSync(join(f.config, "omarchy", "shell.json"), "utf8"));
     expect(shellAgain.bar.layout.center.filter((item: { id: string }) => item.id === "bmw.media")).toHaveLength(1);
     expect(shellAgain.bar.layout.center[0].dynamicArtworkColor).toBe(false);
+    expect(shellAgain.bar.layout.center[0].barProgress).toBe(false);
+    expect(shellAgain.bar.layout.center[0].barDisplayMode).toBe("full");
+    expect(shellAgain.bar.layout.center[0].motionEnabled).toBe(false);
     expect(shellAgain.bar.layout.center[0].trackChangeOsd).toBe(true);
+    expect(shellAgain.bar.layout.center[0].rememberSessionHistory).toBe(false);
 
     const uninstall = run("uninstall.sh", f.env);
     expect(uninstall.exitCode, uninstall.stderr.toString()).toBe(0);

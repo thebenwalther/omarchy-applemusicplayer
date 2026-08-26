@@ -102,6 +102,7 @@ jq '
       "id":"bmw.media",
       "dynamicArtworkColor":true,
       "barProgress":true,
+      "barDisplayMode":"full",
       "motionEnabled":true,
       "trackChangeOsd":false,
       "rememberSessionHistory":true

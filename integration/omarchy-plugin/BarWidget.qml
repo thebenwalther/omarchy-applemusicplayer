@@ -34,10 +34,13 @@ BarWidget {
 
   readonly property bool dynamicArtworkColor: setting("dynamicArtworkColor", true) === true
   readonly property bool barProgressEnabled: setting("barProgress", true) === true
+  readonly property string barDisplayMode: MediaController.normalizeBarDisplayMode(setting("barDisplayMode", "full"))
+  readonly property string effectiveBarDisplayMode: bar && bar.vertical ? "compact" : barDisplayMode
   readonly property bool motionEnabled: setting("motionEnabled", true) === true
   readonly property bool trackChangeOsd: setting("trackChangeOsd", false) === true
   readonly property bool rememberSessionHistory: setting("rememberSessionHistory", true) === true
   property color artworkAccent: Color.accent
+  property string paletteArtUrl: ""
   property var recentHistory: []
   property string observedTrackSignature: ""
   property bool copyAvailable: false
@@ -58,6 +61,7 @@ BarWidget {
 
   function open() {
     popupOpen = true
+    details.resetForOpen()
     requestAppleProbe()
   }
   function close() { popupOpen = false }
@@ -175,7 +179,7 @@ BarWidget {
     cancelSleepTimer()
     sleepMode = "deadline"
     sleepNowMs = Date.now()
-    sleepDeadlineMs = MediaController.timerDeadline(minutes, sleepNowMs)
+    sleepDeadlineMs = MediaController.timerDeadline(MediaController.clampSleepMinutes(minutes), sleepNowMs)
     sleepPlayerKey = currentKey
     sleepTrackSignature = MediaController.trackSignature(currentPlayer)
   }
@@ -236,6 +240,15 @@ BarWidget {
     popupOpen = false
   }
 
+  function openAudioPanel() {
+    if (!bar || !bar.shell || typeof bar.shell.summon !== "function") {
+      showOsd("audio-volume-high", "Audio panel unavailable", 1600)
+      return
+    }
+    if (!bar.shell.summon("omarchy.audio", "{}"))
+      showOsd("audio-volume-high", "Audio panel unavailable", 1600)
+  }
+
   visible: true
   implicitWidth: compactSurface.width
   implicitHeight: barSize
@@ -251,11 +264,16 @@ BarWidget {
   }
   onApplePidsChanged: Qt.callLater(applySourcePreference)
   onCurrentPlayerChanged: historyCapture.restart()
-  onArtUrlChanged: if (!artUrl || !dynamicArtworkColor) artworkAccent = Color.accent
+  onArtUrlChanged: {
+    paletteArtUrl = artUrl
+    if (!artUrl || !dynamicArtworkColor) artworkAccent = Color.accent
+  }
   onDynamicArtworkColorChanged: {
     if (!dynamicArtworkColor) artworkAccent = Color.accent
-    else if (artPalette.colors.length > 0)
-      artworkAccent = MediaController.bestArtworkAccent(artPalette.colors, Color.accent, Color.popups.background)
+    else {
+      var update = MediaController.artworkAccentUpdate(artUrl, paletteArtUrl, artPalette.colors, Color.accent, Color.popups.background)
+      if (update.apply) artworkAccent = update.color
+    }
   }
   onRememberSessionHistoryChanged: if (!rememberSessionHistory) recentHistory = []
 
@@ -264,9 +282,15 @@ BarWidget {
     source: root.dynamicArtworkColor ? root.artUrl : ""
     depth: 4
     rescaleSize: 64
-    onColorsChanged: root.artworkAccent = root.dynamicArtworkColor
-      ? MediaController.bestArtworkAccent(colors, Color.accent, Color.popups.background)
-      : Color.accent
+    onColorsChanged: {
+      var update = MediaController.artworkAccentUpdate(root.artUrl, root.paletteArtUrl, colors, Color.accent, Color.popups.background)
+      if (root.dynamicArtworkColor && update.apply) root.artworkAccent = update.color
+    }
+  }
+
+  Behavior on artworkAccent {
+    enabled: root.motionEnabled
+    ColorAnimation { duration: 220; easing.type: Easing.OutCubic }
   }
 
   Connections {
@@ -381,12 +405,12 @@ BarWidget {
       }
 
       Row {
-        visible: !root.bar.vertical
+        visible: !root.bar.vertical && root.effectiveBarDisplayMode !== "compact"
         spacing: Style.space(5)
         anchors.verticalCenter: parent.verticalCenter
 
         Text {
-          width: Math.min(root.maxLabelWidth * 0.62, implicitWidth)
+          width: root.effectiveBarDisplayMode === "full" ? Style.space(142) : Style.space(205)
           text: root.title
           color: root.bar.barForeground
           font.family: root.bar.fontFamily
@@ -396,7 +420,8 @@ BarWidget {
         }
 
         Text {
-          width: Math.min(root.maxLabelWidth * 0.38, implicitWidth)
+          visible: root.effectiveBarDisplayMode === "full"
+          width: Style.space(88)
           text: root.artist
           color: Qt.darker(root.bar.barForeground, 1.35)
           font.family: root.bar.fontFamily
@@ -437,8 +462,8 @@ BarWidget {
       cursorShape: Qt.PointingHandCursor
       acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
       onClicked: {
-        root.popupOpen = !root.popupOpen
-        if (root.popupOpen) root.requestAppleProbe()
+        if (root.popupOpen) root.close()
+        else root.open()
       }
       onWheel: function(wheel) {
         if (root.currentPlayer && root.currentPlayer.volumeSupported)
@@ -469,6 +494,7 @@ BarWidget {
     artworkAccent: root.artworkAccent
     dynamicArtworkColor: root.dynamicArtworkColor
     barProgressEnabled: root.barProgressEnabled
+    barDisplayMode: root.barDisplayMode
     motionEnabled: root.motionEnabled
     trackChangeOsd: root.trackChangeOsd
     rememberSessionHistory: root.rememberSessionHistory
@@ -490,6 +516,7 @@ BarWidget {
     onHistoryClearRequested: root.clearHistory()
     onPreferenceRequested: function(key, value) { root.updatePreference(key, value) }
     onOpenAppleMusicRequested: root.openAppleMusic()
+    onOpenAudioRequested: root.openAudioPanel()
     onPopupActivated: root.requestAppleProbe()
   }
 }
