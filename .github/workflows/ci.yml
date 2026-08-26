@@ -8,12 +8,14 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
       - name: Static checks
         run: |
           bash -n bin/omarchy-music scripts/install.sh scripts/uninstall.sh
-          jq empty package.json integration/omarchy-plugin/manifest.json
+          jq empty package.json integration/preferences.json integration/omarchy-plugin/manifest.json
+          test "$(tr -d '[:space:]' < VERSION)" = "$(jq -r .version package.json)"
+          test "$(tr -d '[:space:]' < VERSION)" = "$(jq -r .version integration/omarchy-plugin/manifest.json)"
           git diff --check
       - name: Tests
         run: bun test

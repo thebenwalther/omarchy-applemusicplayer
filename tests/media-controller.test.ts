@@ -57,6 +57,15 @@ describe("formatting and timers", () => {
     expect(controller.endOfTrackReached(track, signature, 1.5)).toBe(true);
   });
 
+  test("keeps logical track identity independent from delayed artwork", () => {
+    const track = player(31, { trackTitle: "A", trackArtist: "B", trackAlbum: "C", trackArtUrl: "old.jpg" });
+    const signature = controller.trackSignature(track);
+    expect(controller.artworkSignature(track)).toBe("old.jpg");
+    track.trackArtUrl = "new.jpg";
+    expect(controller.trackSignature(track)).toBe(signature);
+    expect(controller.artworkSignature(track)).toBe("new.jpg");
+  });
+
   test("builds useful source labels", () => {
     const apple = player(40, { trackTitle: "Song", trackArtist: "Artist" });
     expect(controller.sourceName(apple, apple.dbusName)).toBe("Apple Music");
@@ -142,7 +151,19 @@ describe("cinematic presentation helpers", () => {
     expect(controller.artworkAccentUpdate("new", "new", [], "#abcdef", "#101010"))
       .toEqual({ apply: false, color: "" });
     expect(controller.artworkAccentUpdate("new", "new", ["#ff3366"], "#abcdef", "#101010"))
-      .toEqual({ apply: true, color: "#ff3366" });
+      .toEqual({ apply: true, color: "#ee5281" });
+  });
+
+  test("recomputes restrained accents for theme changes and falls back safely", () => {
+    expect(controller.blendColors("#ff0000", "#0000ff", 0.8)).toBe("#cc0033");
+    const dark = controller.artworkAccentUpdate("cover", "cover", ["#ff3366"], "#abcdef", "#101010");
+    const light = controller.artworkAccentUpdate("cover", "cover", ["#224488"], "#335577", "#f8f8f8");
+    expect(dark).toEqual({ apply: true, color: "#ee5281" });
+    expect(light.apply).toBe(true);
+    expect(light.color).not.toBe(dark.color);
+    expect(controller.contrastRatio(light.color, "#f8f8f8")).toBeGreaterThanOrEqual(3);
+    expect(controller.artworkAccentUpdate("cover", "cover", ["invalid", "#151515"], "#abcdef", "#101010"))
+      .toEqual({ apply: true, color: "#abcdef" });
   });
 
   test("formats relative history time and clamps custom sleep durations", () => {
@@ -155,5 +176,28 @@ describe("cinematic presentation helpers", () => {
     expect(controller.clampSleepMinutes(47)).toBe(45);
     expect(controller.clampSleepMinutes(999)).toBe(180);
     expect(controller.timerDeadline(controller.clampSleepMinutes(47), 1_000)).toBe(2_701_000);
+  });
+});
+
+describe("QML accessibility and theme structure", () => {
+  const plugin = new URL("../integration/omarchy-plugin/", import.meta.url);
+
+  test("uses alpha-based secondary text in light and dark theme roles", () => {
+    const popup = readFileSync(new URL("PlayerPopup.qml", plugin), "utf8");
+    const bar = readFileSync(new URL("BarWidget.qml", plugin), "utf8");
+    expect(popup).toContain("Util.alpha(Color.popups.text, 0.68)");
+    expect(bar).toContain("Util.alpha(root.bar.barForeground, 0.68)");
+    expect(popup).not.toContain("Qt.darker");
+    expect(bar).not.toContain("Qt.darker");
+  });
+
+  test("owns keyboard-operable accessible controls", () => {
+    const slider = readFileSync(new URL("MediaSlider.qml", plugin), "utf8");
+    expect(slider).toContain("Accessible.role: Accessible.Slider");
+    expect(slider).toContain("Keys.onLeftPressed");
+    expect(slider).toContain("Keys.onSpacePressed");
+    expect(slider).toContain("onWheel:");
+    for (const file of ["MediaButton.qml", "MediaToggle.qml", "MediaDropdown.qml"])
+      expect(readFileSync(new URL(file, plugin), "utf8")).toContain("Accessible.role:");
   });
 });

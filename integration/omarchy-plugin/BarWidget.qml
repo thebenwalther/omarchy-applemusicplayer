@@ -21,7 +21,6 @@ BarWidget {
   property string manualPlayerKey: ""
   property bool popupOpen: false
   readonly property bool opened: popupOpen
-  property real maxLabelWidth: 250
   property real lastAudibleVolume: 0.7
 
   property string sleepMode: ""
@@ -44,6 +43,8 @@ BarWidget {
   property var recentHistory: []
   property string observedTrackSignature: ""
   property bool copyAvailable: false
+  readonly property color themeAccent: Color.accent
+  readonly property color themePopupBackground: Color.popups.background
 
   readonly property bool hasPlayer: currentPlayer !== null
   readonly property bool hasMedia: hasPlayer && !!(currentPlayer.trackTitle || currentPlayer.trackArtist)
@@ -99,6 +100,21 @@ BarWidget {
       bar.shell.updateEntryInline(moduleName, entry)
     if (key === "rememberSessionHistory" && value !== true) recentHistory = []
     if (key === "dynamicArtworkColor" && value !== true) artworkAccent = Color.accent
+  }
+
+  function refreshArtworkAccent() {
+    if (!dynamicArtworkColor) {
+      artworkAccent = themeAccent
+      return
+    }
+    var update = MediaController.artworkAccentUpdate(
+      artUrl,
+      paletteArtUrl,
+      artPalette.colors,
+      themeAccent,
+      themePopupBackground
+    )
+    if (update.apply) artworkAccent = update.color
   }
 
   function showOsd(icon, message, duration) {
@@ -265,16 +281,12 @@ BarWidget {
   onApplePidsChanged: Qt.callLater(applySourcePreference)
   onCurrentPlayerChanged: historyCapture.restart()
   onArtUrlChanged: {
-    paletteArtUrl = artUrl
-    if (!artUrl || !dynamicArtworkColor) artworkAccent = Color.accent
+    paletteArtUrl = ""
+    if (!artUrl || !dynamicArtworkColor) artworkAccent = themeAccent
   }
-  onDynamicArtworkColorChanged: {
-    if (!dynamicArtworkColor) artworkAccent = Color.accent
-    else {
-      var update = MediaController.artworkAccentUpdate(artUrl, paletteArtUrl, artPalette.colors, Color.accent, Color.popups.background)
-      if (update.apply) artworkAccent = update.color
-    }
-  }
+  onDynamicArtworkColorChanged: refreshArtworkAccent()
+  onThemeAccentChanged: refreshArtworkAccent()
+  onThemePopupBackgroundChanged: refreshArtworkAccent()
   onRememberSessionHistoryChanged: if (!rememberSessionHistory) recentHistory = []
 
   ColorQuantizer {
@@ -283,8 +295,8 @@ BarWidget {
     depth: 4
     rescaleSize: 64
     onColorsChanged: {
-      var update = MediaController.artworkAccentUpdate(root.artUrl, root.paletteArtUrl, colors, Color.accent, Color.popups.background)
-      if (root.dynamicArtworkColor && update.apply) root.artworkAccent = update.color
+      root.paletteArtUrl = String(source || "")
+      root.refreshArtworkAccent()
     }
   }
 
@@ -423,7 +435,7 @@ BarWidget {
           visible: root.effectiveBarDisplayMode === "full"
           width: Style.space(88)
           text: root.artist
-          color: Qt.darker(root.bar.barForeground, 1.35)
+          color: Util.alpha(root.bar.barForeground, 0.68)
           font.family: root.bar.fontFamily
           font.pixelSize: Style.font.caption
           elide: Text.ElideRight
@@ -431,8 +443,8 @@ BarWidget {
       }
 
       Text {
-        text: root.playing ? "󰏤" : "󰐊"
-        color: root.playing ? root.artworkAccent : Qt.darker(root.bar.barForeground, 1.35)
+        text: root.hasPlayer ? (root.playing ? "󰏤" : "󰐊") : "󰝚"
+        color: root.playing ? root.bar.barForeground : Util.alpha(root.bar.barForeground, 0.68)
         font.family: root.bar.fontFamily
         font.pixelSize: Style.font.bodySmall
         anchors.verticalCenter: parent.verticalCenter

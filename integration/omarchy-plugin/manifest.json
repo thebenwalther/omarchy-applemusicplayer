@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "bmw.media",
   "name": "Apple Music Media",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "author": "Ben Walther",
   "description": "Cinematic Apple-first MPRIS controls with keyboard navigation, adaptive bar modes, and session tools",
   "kinds": ["bar-widget"],

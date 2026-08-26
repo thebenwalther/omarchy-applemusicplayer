@@ -150,6 +150,32 @@ function colorSaturation(value) {
   return max === 0 ? 0 : (max - min) / max
 }
 
+function colorHex(value) {
+  var rgb = colorChannels(value)
+  if (!rgb) return ""
+  function channel(value) {
+    var text = Math.max(0, Math.min(255, Math.round(value))).toString(16)
+    return text.length < 2 ? "0" + text : text
+  }
+  return "#" + channel(rgb.r) + channel(rgb.g) + channel(rgb.b)
+}
+
+function blendColors(primary, secondary, primaryWeight) {
+  var left = colorChannels(primary)
+  var right = colorChannels(secondary)
+  if (!left || !right) return colorHex(primary) || colorHex(secondary)
+  var weight = Math.max(0, Math.min(1, Number(primaryWeight)))
+  if (!isFinite(weight)) weight = 0.8
+  return colorHex("#" + [
+    Math.round(left.r * weight + right.r * (1 - weight)),
+    Math.round(left.g * weight + right.g * (1 - weight)),
+    Math.round(left.b * weight + right.b * (1 - weight))
+  ].map(function(channel) {
+    var text = channel.toString(16)
+    return text.length < 2 ? "0" + text : text
+  }).join(""))
+}
+
 function bestArtworkAccent(colors, fallback, background) {
   var list = asArray(colors)
   var best = ""
@@ -164,15 +190,21 @@ function bestArtworkAccent(colors, fallback, background) {
       bestScore = score
     }
   }
-  return best || String(fallback || "#ffffff")
+  return best || String(fallback || "")
 }
 
 function artworkAccentUpdate(currentArtUrl, paletteArtUrl, colors, fallback, background) {
   var current = String(currentArtUrl || "")
-  if (!current) return { apply: true, color: String(fallback || "#ffffff") }
+  var fallbackColor = colorHex(fallback) || String(fallback || "#ffffff")
+  if (!current) return { apply: true, color: fallbackColor }
   if (current !== String(paletteArtUrl || "") || asArray(colors).length === 0)
     return { apply: false, color: "" }
-  return { apply: true, color: bestArtworkAccent(colors, fallback, background) }
+  var candidate = bestArtworkAccent(colors, "", background)
+  if (!candidate) return { apply: true, color: fallbackColor }
+  var blended = blendColors(candidate, fallbackColor, 0.8)
+  if (!blended || contrastRatio(blended, background) < 3)
+    return { apply: true, color: fallbackColor }
+  return { apply: true, color: blended }
 }
 
 function layoutMode(width) {
@@ -261,7 +293,11 @@ function timerPhase(mode, deadlineMs, player, originalSignature, nowMs, fadeSeco
 
 function trackSignature(player) {
   if (!player) return ""
-  return [player.trackTitle || "", player.trackArtist || "", player.trackAlbum || "", player.trackArtUrl || ""].join("\u001f")
+  return [player.trackTitle || "", player.trackArtist || "", player.trackAlbum || ""].join("\u001f")
+}
+
+function artworkSignature(player) {
+  return String(player && player.trackArtUrl || "")
 }
 
 function formatTime(seconds) {
@@ -310,6 +346,8 @@ if (typeof module !== "undefined") {
     relativeLuminance: relativeLuminance,
     contrastRatio: contrastRatio,
     colorSaturation: colorSaturation,
+    colorHex: colorHex,
+    blendColors: blendColors,
     bestArtworkAccent: bestArtworkAccent,
     artworkAccentUpdate: artworkAccentUpdate,
     layoutMode: layoutMode,
@@ -322,6 +360,7 @@ if (typeof module !== "undefined") {
     fadeVolume: fadeVolume,
     timerPhase: timerPhase,
     trackSignature: trackSignature,
+    artworkSignature: artworkSignature,
     formatTime: formatTime,
     timerDeadline: timerDeadline,
     timerRemaining: timerRemaining,

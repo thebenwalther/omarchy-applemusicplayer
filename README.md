@@ -47,12 +47,15 @@ bash scripts/install.sh
 
 The installer:
 
+- copies a self-contained runtime to `$XDG_DATA_HOME/omarchy-applemusicplayer/releases`, atomically activates it through `current`, and retains the immediately previous runtime for rollback;
 - places `bmw.media` immediately before `omarchy.clock` in the center bar section;
 - preserves existing `bmw.media` inline preferences across installs and upgrades;
 - binds `SUPER + SHIFT + M` to Apple Music;
 - removes the obsolete MusicKit service, mini-player binding, and control links during an upgrade;
 - stores configuration and replaced-plugin backups under `$XDG_STATE_HOME/omarchy-applemusicplayer/backups` (normally `~/.local/state/...`);
 - preserves the old MusicKit credential directory if it exists.
+
+The installed widget, launcher, and `omarchy-applemusicplayer-uninstall` command continue to work if the clone is moved or deleted. Contributors can instead use `bash scripts/install.sh --link` to keep the plugin linked to the checkout for QML hot reload.
 
 ## Controls
 
@@ -61,9 +64,9 @@ The installer:
 | `SUPER + SHIFT + M` | Launch or focus Apple Music |
 | Any click on the bar widget | Open or close the detailed popup |
 | Scroll on the widget | Adjust volume, or previous/next when volume is unavailable |
-| `Space` in popup | Play/pause |
-| `Left` / `Right` in popup | Seek −10 / +10 seconds |
-| `Up` / `Down` in popup | Adjust volume by 5% |
+| `Space` in popup | Activate the focused control; otherwise play/pause |
+| `Left` / `Right` in popup | Adjust a focused slider/dropdown; otherwise seek −10 / +10 seconds |
+| `Up` / `Down` in popup | Adjust a focused slider/dropdown; otherwise adjust volume by 5% |
 | `Tab` / `Shift + Tab` | Move between popup controls |
 | `Escape` | Return to Player from More, then close the popup |
 | Hardware media keys | Previous, play/pause, and next through MPRIS |
@@ -87,7 +90,7 @@ The following settings are stored inline with the `bmw.media` entry in `~/.confi
 | `trackChangeOsd` | `false` | Shows `Title — Artist` when a track changes |
 | `rememberSessionHistory` | `true` | Keeps up to ten tracks until the shell restarts |
 
-Text always uses the Omarchy popup palette; artwork colors are limited to accents, progress, borders, and glow. `wl-copy` is optional, and copy actions are disabled when it is unavailable.
+Text always uses the Omarchy popup palette; artwork colors are blended 80/20 with the theme accent and limited to progress, rails, keylines, borders, and atmosphere. Theme changes recalculate the palette immediately. `wl-copy` is optional, and copy actions are disabled when it is unavailable.
 
 ## Limitations
 
@@ -112,7 +115,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) before proposing changes. Please use GitH
 ## Uninstall
 
 ```bash
-bash scripts/uninstall.sh
+omarchy-applemusicplayer-uninstall
 ```
 
-Uninstall removes the active plugin, launcher, binding, desktop entry, and bar-layout item. It keeps credentials and all backups for manual recovery.
+Uninstall removes the active plugin, installed runtimes, launcher, binding, desktop entry, and bar-layout item. It keeps credentials and all backups for manual recovery. `bash scripts/uninstall.sh` remains available from a retained checkout.
