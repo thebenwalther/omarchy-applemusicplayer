@@ -105,10 +105,16 @@ describe("cinematic presentation helpers", () => {
     expect(controller.preferenceDefaults()).toEqual({
       dynamicArtworkColor: true,
       barProgress: true,
+      barDisplayMode: "full",
       motionEnabled: true,
       trackChangeOsd: false,
       rememberSessionHistory: true,
     });
+    expect(controller.normalizeBarDisplayMode("compact")).toBe("compact");
+    expect(controller.normalizeBarDisplayMode("TITLE")).toBe("title");
+    expect(controller.normalizeBarDisplayMode("unexpected")).toBe("full");
+    expect(controller.normalizePopupPage("more", false)).toBe("more");
+    expect(controller.normalizePopupPage("more", true)).toBe("player");
   });
 
   test("formats copy text and bounds deduplicated session history", () => {
@@ -126,5 +132,28 @@ describe("cinematic presentation helpers", () => {
     expect(history.map((entry: { title: string }) => entry.title)).toEqual(["4", "5", "3"]);
     expect(controller.copyText({ title: "Only title" })).toBe("Only title");
     expect(controller.copyText({ album: "Only album" })).toBe("Only album");
+  });
+
+  test("applies palettes only to the artwork that produced them", () => {
+    expect(controller.artworkAccentUpdate("", "old", ["#ff3366"], "#abcdef", "#101010"))
+      .toEqual({ apply: true, color: "#abcdef" });
+    expect(controller.artworkAccentUpdate("new", "old", ["#ff3366"], "#abcdef", "#101010"))
+      .toEqual({ apply: false, color: "" });
+    expect(controller.artworkAccentUpdate("new", "new", [], "#abcdef", "#101010"))
+      .toEqual({ apply: false, color: "" });
+    expect(controller.artworkAccentUpdate("new", "new", ["#ff3366"], "#abcdef", "#101010"))
+      .toEqual({ apply: true, color: "#ff3366" });
+  });
+
+  test("formats relative history time and clamps custom sleep durations", () => {
+    const now = 10 * 24 * 60 * 60 * 1000;
+    expect(controller.relativeTime(now - 20_000, now)).toBe("now");
+    expect(controller.relativeTime(now - 8 * 60_000, now)).toBe("8m ago");
+    expect(controller.relativeTime(now - 3 * 60 * 60_000, now)).toBe("3h ago");
+    expect(controller.relativeTime(now - 2 * 24 * 60 * 60_000, now)).toBe("2d ago");
+    expect(controller.clampSleepMinutes(1)).toBe(5);
+    expect(controller.clampSleepMinutes(47)).toBe(45);
+    expect(controller.clampSleepMinutes(999)).toBe(180);
+    expect(controller.timerDeadline(controller.clampSleepMinutes(47), 1_000)).toBe(2_701_000);
   });
 });
