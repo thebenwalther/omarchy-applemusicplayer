@@ -1,6 +1,6 @@
 {
   "name": "omarchy-applemusicplayer",
-  "version": "3.2.1",
+  "version": "3.3.0",
   "private": true,
   "type": "module",
   "description": "Apple Music web-player integration and rich MPRIS widget for Omarchy",

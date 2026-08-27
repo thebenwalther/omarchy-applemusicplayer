@@ -13,11 +13,13 @@ An Apple-first media experience for Omarchy built around Apple's official web pl
 ## Features
 
 - Launches or focuses the existing [Apple Music web player](https://music.apple.com/) window
-- Cinematic, responsive two-page popup with large artwork, an artwork-derived accent, ambient depth, and readable Omarchy-native colors
+- Cinematic two-page popup with large artwork, an artwork-derived accent, ambient depth, and readable Omarchy-native colors
+- True wide (520px), medium (400px), and narrow (320px) layouts with horizontal or stacked artwork heroes and responsive preference grids
 - Stable bar pill with Full, Title, and Compact layouts plus an optional progress rail
 - Timeline, seeking, volume, mute, previous/next, and capability-aware playback controls
 - Keyboard-first navigation with visible focus states and automatic scrolling
 - Apple-first source detection while keeping every MPRIS player selectable
+- One in-process session shared across monitor widgets for source choice, history, timers, clipboard capability, and artwork palette state
 - Capability-aware shuffle and repeat controls that only appear when supported
 - Session-only sleep timer for presets, a custom 5–180 minute duration, or the end of the current track, with a five-second volume fade
 - Copy Now Playing, optional track-change OSD, and a private in-memory history of the ten most recent unique tracks
@@ -73,6 +75,8 @@ The installed widget, launcher, and `omarchy-applemusicplayer-uninstall` command
 
 Apple Music is selected automatically when its correlated Chromium MPRIS source is playing. Selecting another playing source manually keeps it active until it stops or disappears.
 
+When more than one player is available, the source chip opens an anchored, keyboard-accessible popover labeled with `title — artist`. Popup visibility and page navigation remain local to each bar surface, while media state is shared so multiple monitors do not create duplicate histories or competing sleep timers.
+
 Open **More** for sleep presets and a custom duration, the latest five entries from session history, appearance preferences, and Omarchy's native Audio Output panel. Opening the popup always returns to the Player page. The history keeps at most ten unique tracks in memory and is cleared when the shell restarts; entries can be copied but cannot be replayed because Apple exposes no stable track URL through MPRIS.
 
 Sleep timers live only for the current shell session. During the final five seconds the widget fades the selected source when volume is supported, pauses it, restores its original volume while paused, and shows an Omarchy OSD. Cancelling during the fade restores the volume immediately. “End of track” is best-effort: it uses the reported position, duration, and track identity.
@@ -108,7 +112,7 @@ bash -n bin/omarchy-music scripts/install.sh scripts/uninstall.sh
 jq empty integration/omarchy-plugin/manifest.json package.json
 ```
 
-Tests exercise source selection, PID correlation, palette ownership and fallback, bar-mode normalization, responsive thresholds, relative timestamps, custom timer bounds, every sleep-fade transition, launcher matching, clean installation, preference-preserving upgrades, idempotency, and uninstall in isolated XDG fixtures.
+Tests exercise source selection, PID correlation, shared multi-monitor state, palette ownership and fallback, bar-mode normalization, all three responsive layouts, relative timestamps, custom timer bounds, every sleep-fade transition, launcher matching, v3.2.1 migration, clean installation, preference-preserving upgrades, idempotency, and uninstall in isolated XDG fixtures.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before proposing changes. Please use GitHub's private vulnerability reporting flow described in [SECURITY.md](SECURITY.md) for security-sensitive reports.
 

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync,
-  readdirSync, readlinkSync, realpathSync, rmSync, writeFileSync,
+  readdirSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -99,6 +99,38 @@ describe("release metadata", () => {
 });
 
 describe("installer lifecycle", () => {
+  test("migrates a v3.2.1 copied runtime to v3.3 and keeps it as rollback", () => {
+    const f = fixture();
+    const installRoot = join(f.data, "omarchy-applemusicplayer");
+    const previous = join(installRoot, "releases", "3.2.1", "20260826-120000-321");
+    mkdirSync(join(previous, "plugin"), { recursive: true });
+    mkdirSync(join(previous, "bin"), { recursive: true });
+    writeFileSync(join(previous, "plugin", "legacy-runtime"), "v3.2.1");
+    symlinkSync(previous, join(installRoot, "current"));
+    writeFileSync(join(installRoot, "install.json"), JSON.stringify({
+      mode: "copy", version: "3.2.1", sourceRepo: "/deleted/v3.2.1/checkout", runtime: previous,
+    }));
+
+    const plugin = join(f.config, "omarchy", "plugins", "bmw.media");
+    rmSync(plugin, { recursive: true, force: true });
+    symlinkSync(join(installRoot, "current", "plugin"), plugin);
+
+    const result = runAt(repo, "install.sh", f.env);
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(realpathSync(join(installRoot, "current"))).toStartWith(join(installRoot, "releases", "3.3.0"));
+    expect(existsSync(join(previous, "plugin", "legacy-runtime"))).toBe(true);
+    expect(runtimeDirectories(f.data)).toHaveLength(2);
+
+    const shell = JSON.parse(readFileSync(join(f.config, "omarchy", "shell.json"), "utf8"));
+    expect(shell.bar.layout.center[0]).toMatchObject({
+      id: "bmw.media",
+      barDisplayMode: "full",
+      dynamicArtworkColor: false,
+      motionEnabled: false,
+      trackChangeOsd: true,
+    });
+  });
+
   test("migrates to copied runtimes, preserves preferences, and retains one rollback", () => {
     const f = fixture();
     const first = runAt(repo, "install.sh", f.env);
@@ -109,7 +141,7 @@ describe("installer lifecycle", () => {
     const plugin = join(f.config, "omarchy", "plugins", "bmw.media");
     expect(lstatSync(plugin).isSymbolicLink()).toBe(true);
     expect(readlinkSync(plugin)).toBe(join(current, "plugin"));
-    expect(realpathSync(plugin)).toStartWith(join(installRoot, "releases", "3.2.1"));
+    expect(realpathSync(plugin)).toStartWith(join(installRoot, "releases", "3.3.0"));
     expect(readlinkSync(join(f.bin, "omarchy-music"))).toBe(join(current, "bin", "omarchy-music"));
     expect(readlinkSync(join(f.bin, "omarchy-applemusicplayer-uninstall"))).toBe(join(current, "bin", "omarchy-applemusicplayer-uninstall"));
     expect(readFileSync(join(f.data, "applications", "Apple Music.desktop"), "utf8")).toContain("Exec=omarchy-music\n");
@@ -144,7 +176,7 @@ describe("installer lifecycle", () => {
       expect(reinstall.exitCode, reinstall.stderr.toString()).toBe(0);
     }
     expect(runtimeDirectories(f.data)).toHaveLength(2);
-    expect(JSON.parse(readFileSync(join(installRoot, "install.json"), "utf8"))).toMatchObject({ mode: "copy", version: "3.2.1" });
+    expect(JSON.parse(readFileSync(join(installRoot, "install.json"), "utf8"))).toMatchObject({ mode: "copy", version: "3.3.0" });
     const bindingsAgain = readFileSync(join(f.config, "hypr", "bindings.lua"), "utf8");
     expect(bindingsAgain.match(/omarchy-applemusicplayer:start/g)).toHaveLength(1);
     const shellAgain = JSON.parse(readFileSync(join(f.config, "omarchy", "shell.json"), "utf8"));

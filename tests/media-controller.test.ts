@@ -109,8 +109,14 @@ describe("cinematic presentation helpers", () => {
   });
 
   test("uses deterministic responsive thresholds and preference defaults", () => {
-    expect(controller.layoutMode(459)).toBe("narrow");
+    expect(controller.responsiveClass(320)).toBe("narrow");
+    expect(controller.layoutMode(359)).toBe("narrow");
+    expect(controller.layoutMode(360)).toBe("medium");
+    expect(controller.layoutMode(459)).toBe("medium");
     expect(controller.layoutMode(460)).toBe("wide");
+    expect(controller.responsiveGeometry(320)).toEqual({ mode: "narrow", targetWidth: 340, artworkSize: 156, stackedHero: true, preferenceColumns: 1, stackedActions: true });
+    expect(controller.responsiveGeometry(400)).toEqual({ mode: "medium", targetWidth: 420, artworkSize: 142, stackedHero: false, preferenceColumns: 1, stackedActions: false });
+    expect(controller.responsiveGeometry(520)).toEqual({ mode: "wide", targetWidth: 520, artworkSize: 176, stackedHero: false, preferenceColumns: 2, stackedActions: false });
     expect(controller.preferenceDefaults()).toEqual({
       dynamicArtworkColor: true,
       barProgress: true,
@@ -177,13 +183,49 @@ describe("cinematic presentation helpers", () => {
     expect(controller.clampSleepMinutes(999)).toBe(180);
     expect(controller.timerDeadline(controller.clampSleepMinutes(47), 1_000)).toBe(2_701_000);
   });
+
+  test("models source-popover close, idle presentation, and reduced motion", () => {
+    expect(controller.sourcePopoverSelection("spotify")).toEqual({ selectedKey: "spotify", open: false });
+    expect(controller.idlePresentation(false)).toEqual({
+      title: "Apple Music",
+      prompt: "Open to start listening",
+      icon: "󰝚",
+      controlsVisible: false,
+    });
+    expect(controller.idlePresentation(true).controlsVisible).toBe(true);
+    expect(controller.motionDuration(true, 200)).toBe(200);
+    expect(controller.motionDuration(false, 200)).toBe(0);
+  });
+
+  test("shares source, history, timer, palette, and popup counts across consumers", () => {
+    let shared = controller.createSessionState();
+    const firstConsumer = () => shared;
+    const secondConsumer = () => shared;
+    shared = controller.reduceSessionState(shared, { type: "source", key: "apple" });
+    shared = controller.reduceSessionState(shared, { type: "history", history: [{ title: "One" }] });
+    shared = controller.reduceSessionState(shared, { type: "timer", mode: "deadline" });
+    shared = controller.reduceSessionState(shared, { type: "palette", artUrl: "cover.jpg" });
+    shared = controller.reduceSessionState(shared, { type: "popup", open: true });
+    shared = controller.reduceSessionState(shared, { type: "popup", open: true });
+    expect(firstConsumer()).toBe(secondConsumer());
+    expect(shared).toEqual({
+      manualPlayerKey: "apple",
+      history: [{ title: "One" }],
+      sleepMode: "deadline",
+      paletteArtUrl: "cover.jpg",
+      popupConsumers: 2,
+    });
+    shared = controller.reduceSessionState(shared, { type: "popup", open: false });
+    expect(shared.popupConsumers).toBe(1);
+  });
 });
 
 describe("QML accessibility and theme structure", () => {
   const plugin = new URL("../integration/omarchy-plugin/", import.meta.url);
 
   test("uses alpha-based secondary text in light and dark theme roles", () => {
-    const popup = readFileSync(new URL("PlayerPopup.qml", plugin), "utf8");
+    const popup = readFileSync(new URL("ArtworkHero.qml", plugin), "utf8")
+      + readFileSync(new URL("MorePage.qml", plugin), "utf8");
     const bar = readFileSync(new URL("BarWidget.qml", plugin), "utf8");
     expect(popup).toContain("Util.alpha(Color.popups.text, 0.68)");
     expect(bar).toContain("Util.alpha(root.bar.barForeground, 0.68)");
@@ -199,5 +241,17 @@ describe("QML accessibility and theme structure", () => {
     expect(slider).toContain("onWheel:");
     for (const file of ["MediaButton.qml", "MediaToggle.qml", "MediaDropdown.qml"])
       expect(readFileSync(new URL(file, plugin), "utf8")).toContain("Accessible.role:");
+  });
+
+  test("splits responsive pages around one shared QML session", () => {
+    const session = readFileSync(new URL("MediaSession.qml", plugin), "utf8");
+    const bar = readFileSync(new URL("BarWidget.qml", plugin), "utf8");
+    const popup = readFileSync(new URL("PlayerPopup.qml", plugin), "utf8");
+    expect(session).toStartWith("pragma Singleton");
+    expect(session).toContain('target: "bmw-media"');
+    expect(bar).toContain("Local.MediaSession");
+    expect(popup).toContain("PlayerPage {");
+    expect(popup).toContain("MorePage {");
+    expect(readFileSync(new URL("SourcePopover.qml", plugin), "utf8")).toContain('Accessible.name: "Media sources"');
   });
 });

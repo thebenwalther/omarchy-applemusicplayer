@@ -4,6 +4,15 @@ All notable changes to Omarchy Apple Music Player are documented here. Releases 
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-08-27
+
+- Centralized player observation, Apple source correlation, history, sleep timers, clipboard probing, and artwork palettes in one multi-monitor QML session.
+- Split the popup into responsive Player, More, artwork hero, source popover, and accessible control components.
+- Added wide, medium, and narrow layouts with semantic Omarchy spacing, animated popup height, and motion-free equivalents.
+- Replaced inline source expansion with a keyboard-accessible anchored popover and refined the More page hierarchy.
+- Stabilized idle bar geometry and made Open Apple Music the primary idle action while hiding meaningless playback controls.
+- Made the shared controller attach reactively to Omarchy's MPRIS service during shell startup and safely fall back for unsupported artwork data URLs.
+
 ## [3.2.1] - 2026-08-26
 
 - Recomputed restrained artwork accents when Omarchy themes change and restored native popup borders and text-safe color roles.
@@ -38,7 +47,8 @@ All notable changes to Omarchy Apple Music Player are documented here. Releases 
 
 The unsupported pre-v3 experiment is retained only at the `musickit-prototype-v0.1` tag.
 
-[Unreleased]: https://github.com/thebenwalther/omarchy-applemusicplayer/compare/v3.2.1...HEAD
+[Unreleased]: https://github.com/thebenwalther/omarchy-applemusicplayer/compare/v3.3.0...HEAD
+[3.3.0]: https://github.com/thebenwalther/omarchy-applemusicplayer/compare/v3.2.1...v3.3.0
 [3.2.1]: https://github.com/thebenwalther/omarchy-applemusicplayer/compare/v3.2.0...v3.2.1
 [3.2.0]: https://github.com/thebenwalther/omarchy-applemusicplayer/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/thebenwalther/omarchy-applemusicplayer/releases/tag/v3.1.0

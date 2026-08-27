@@ -207,8 +207,53 @@ function artworkAccentUpdate(currentArtUrl, paletteArtUrl, colors, fallback, bac
   return { apply: true, color: blended }
 }
 
+function responsiveClass(width) {
+  var value = Number(width || 0)
+  if (value < 360) return "narrow"
+  if (value < 460) return "medium"
+  return "wide"
+}
+
 function layoutMode(width) {
-  return Number(width || 0) < 460 ? "narrow" : "wide"
+  return responsiveClass(width)
+}
+
+function responsiveGeometry(width) {
+  var mode = responsiveClass(width)
+  if (mode === "wide")
+    return { mode: mode, targetWidth: 520, artworkSize: 176, stackedHero: false, preferenceColumns: 2, stackedActions: false }
+  if (mode === "medium")
+    return { mode: mode, targetWidth: 420, artworkSize: 142, stackedHero: false, preferenceColumns: 1, stackedActions: false }
+  return { mode: mode, targetWidth: 340, artworkSize: 156, stackedHero: true, preferenceColumns: 1, stackedActions: true }
+}
+
+function motionDuration(enabled, duration) {
+  return enabled ? Math.max(0, Number(duration || 0)) : 0
+}
+
+function sourcePopoverSelection(key) {
+  return { selectedKey: String(key || ""), open: false }
+}
+
+function idlePresentation(hasPlayer) {
+  return hasPlayer
+    ? { title: "", prompt: "", icon: "󰐊", controlsVisible: true }
+    : { title: "Apple Music", prompt: "Open to start listening", icon: "󰝚", controlsVisible: false }
+}
+
+function createSessionState() {
+  return { manualPlayerKey: "", history: [], sleepMode: "", paletteArtUrl: "", popupConsumers: 0 }
+}
+
+function reduceSessionState(state, action) {
+  var next = Object.assign({}, state || createSessionState())
+  var event = action || {}
+  if (event.type === "source") next.manualPlayerKey = String(event.key || "")
+  else if (event.type === "history") next.history = asArray(event.history).slice()
+  else if (event.type === "timer") next.sleepMode = String(event.mode || "")
+  else if (event.type === "palette") next.paletteArtUrl = String(event.artUrl || "")
+  else if (event.type === "popup") next.popupConsumers = Math.max(0, Number(next.popupConsumers || 0) + (event.open ? 1 : -1))
+  return next
 }
 
 function copyText(value) {
@@ -350,7 +395,14 @@ if (typeof module !== "undefined") {
     blendColors: blendColors,
     bestArtworkAccent: bestArtworkAccent,
     artworkAccentUpdate: artworkAccentUpdate,
+    responsiveClass: responsiveClass,
     layoutMode: layoutMode,
+    responsiveGeometry: responsiveGeometry,
+    motionDuration: motionDuration,
+    sourcePopoverSelection: sourcePopoverSelection,
+    idlePresentation: idlePresentation,
+    createSessionState: createSessionState,
+    reduceSessionState: reduceSessionState,
     copyText: copyText,
     historyEntry: historyEntry,
     addHistory: addHistory,
