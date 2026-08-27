@@ -117,14 +117,17 @@ BarWidget {
         }
       }
 
-      Column {
+      Row {
+        id: metadataRow
         visible: !root.bar.vertical && root.effectiveBarDisplayMode !== "compact"
         width: Math.max(0, pillRow.width - pillRow.children[0].width - stateIcon.width - pillRow.spacing * 2)
-        spacing: 0
+        spacing: root.effectiveBarDisplayMode === "full" ? Style.spacing.controlGap : 0
         anchors.verticalCenter: parent.verticalCenter
 
         Text {
-          width: parent.width
+          id: titleLabel
+          width: root.effectiveBarDisplayMode === "full"
+            ? Math.min(implicitWidth, Math.max(0, (parent.width - parent.spacing) * 0.62)) : parent.width
           text: session.title
           color: root.bar.barForeground
           font.family: root.bar.fontFamily
@@ -133,7 +136,7 @@ BarWidget {
           elide: Text.ElideRight
         }
         Text {
-          width: parent.width
+          width: Math.max(0, parent.width - titleLabel.width - parent.spacing)
           visible: root.effectiveBarDisplayMode === "full"
           text: session.artist
           color: Util.alpha(root.bar.barForeground, 0.68)

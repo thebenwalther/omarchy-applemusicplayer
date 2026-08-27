@@ -233,6 +233,14 @@ describe("QML accessibility and theme structure", () => {
     expect(bar).not.toContain("Qt.darker");
   });
 
+  test("keeps bar title and artist on one horizontal line", () => {
+    const bar = readFileSync(new URL("BarWidget.qml", plugin), "utf8");
+    expect(bar).toContain("id: metadataRow");
+    expect(bar).toContain('spacing: root.effectiveBarDisplayMode === "full" ? Style.spacing.controlGap : 0');
+    expect(bar).toContain("Math.min(implicitWidth, Math.max(0, (parent.width - parent.spacing) * 0.62))");
+    expect(bar).not.toContain("      Column {\n        visible: !root.bar.vertical");
+  });
+
   test("owns keyboard-operable accessible controls", () => {
     const slider = readFileSync(new URL("MediaSlider.qml", plugin), "utf8");
     expect(slider).toContain("Accessible.role: Accessible.Slider");
